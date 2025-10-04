@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>決済完了 – Appicel</title>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Meiryo, sans-serif; margin: 0; padding: 24px; }
+  .box { max-width: 640px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px; }
+  h1 { margin-top: 0; }
+  .meta { color: #6b7280; font-size: 14px; }
+  .actions { margin-top: 16px; display: flex; gap: 12px; }
+  a.btn { padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; text-decoration: none; color: #111827; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>決済が完了しました。ありがとうございます！</h1>
+    <p>購入内容を確認し、トップに戻れます。</p>
+    <div id="info" class="meta">検証中...</div>
+    <div class="actions"><a class="btn" href="/">トップへ戻る</a></div>
+  </div>
+  <script>
+    (async function(){
+      const q = new URLSearchParams(location.search);
+      const session_id = q.get('session_id');
+      if(!session_id){ document.getElementById('info').textContent = 'セッションIDが見つかりません。'; return; }
+      try{
+        const res = await fetch('/.netlify/functions/retrieve-session?session_id=' + encodeURIComponent(session_id));
+        const json = await res.json();
+        if(json.paid){
+          const md = json.metadata || {};
+          document.getElementById('info').textContent =
+            `支払い済み｜セル: ${md.cellKey || '(未指定)'} / 枠: ${md.tier || ''} / 期間: ${md.period || ''}`;
+        }else{
+          document.getElementById('info').textContent = '未決済か検証に失敗しました。';
+        }
+      }catch(e){
+        document.getElementById('info').textContent = '検証エラーが発生しました。';
+      }
+    })();
+  </script>
+</body>
+</html>

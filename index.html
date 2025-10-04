@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Appicel(アピセル)</title>
+  <style>
+    :root{ --cell:18px; --gap:1px; --grid-size:32; --bg:#fff; --text:#111827; }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif; color:var(--text); background:var(--bg); display:grid; grid-template-rows:auto 1fr; }
+
+    /* ヘッダー */
+    header{ padding:20px 16px; text-align:center; border-bottom:1px solid rgba(0,0,0,.06); }
+    header h1{ font-size:28px; margin:0; letter-spacing:.03em; font-weight:700; }
+
+    /* ビューポートとステージ */
+    .viewport{ width:100%; height:calc(100vh - 80px); overflow:hidden; background:#f9fafb; position:relative; }
+    .stage{ position:absolute; top:0; left:0; transform-origin:top left; transition:transform .05s linear; display:inline-block; }
+
+    /* グリッド */
+    .grid{ display:grid; grid-template-columns:repeat(var(--grid-size), var(--cell)); grid-auto-rows:var(--cell); gap:var(--gap); background:
+      linear-gradient(90deg, rgba(0,0,0,.06) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(0,0,0,.06) 1px, transparent 1px);
+      background-size:calc(var(--cell)+var(--gap)) calc(var(--cell)+var(--gap)); padding:var(--gap); border-radius:16px; }
+
+    /* セル */
+    .cell{ position:relative; width:var(--cell); height:var(--cell); border-radius:4px; background:#f3f4f6; cursor:pointer; outline:1px solid rgba(0,0,0,.1); display:grid; place-items:center; }
+    .cell[data-owner]{ background:#e5e7eb; }
+    .thumb{ width:100%; height:100%; object-fit:cover; border-radius:4px; display:block; }
+    .cell .txt{ pointer-events:none; font-weight:700; color:var(--text); font-size:10px; line-height:1; }
+
+    /* 枠（通常/赤/虹） */
+    .tier-normal{ outline:1px solid rgba(0,0,0,.2); }
+    .tier-red{ outline:2px solid #dc2626; position:relative; }
+    .tier-rainbow{ outline:none; position:relative; }
+    .tier-rainbow::after{ content:""; position:absolute; inset:-1px; border-radius:5px; pointer-events:none; z-index:2; padding:1px; background:conic-gradient(#ff0040,#ff7a00,#ffd100,#00e060,#00c0ff,#7a5cff,#ff00c8,#ff0040); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; border-radius:5px; }
+
+    /* ツールチップ */
+    .tip{ position:fixed; z-index:20; pointer-events:none; background:#fff; padding:6px 8px; border:1px solid rgba(0,0,0,.12); border-radius:8px; font-size:12px; color:var(--text); opacity:0; transform:translateY(-6px); transition:opacity .1s, transform .1s; }
+    .tip.show{ opacity:1; transform:translateY(0); }
+
+    /* モーダル（ズームの影響を受けない・常に中央） */
+    dialog{ border:none; border-radius:16px; padding:0; background:#fff; color:var(--text); width:640px; max-width:calc(100% - 24px); position:fixed; inset:auto; }
+    dialog::backdrop{ background: rgba(0,0,0,.25); }
+    .modal{ padding:16px; display:grid; gap:12px; }
+    .modal h2{ font-size:16px; margin:0; }
+    .row{ display:grid; gap:6px; }
+    .row label{ font-size:12px; opacity:.8; }
+    .row input[type="url"], .row input[type="text"], .row textarea{ width:100%; background:#f3f4f6; border-radius:10px; border:1px solid rgba(0,0,0,.1); padding:10px 12px; }
+    .cover{ width:100%; height:clamp(180px, 50vh, 420px); background:#f3f4f6; border:1px solid rgba(0,0,0,.06); border-radius:12px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .cover img{ max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; display:block; background:#0001; }
+    .desc{ white-space:pre-wrap; line-height:1.6; }
+
+    /* センター配置用（ズーム非依存） */
+    .centered{ position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:50; }
+  </style>
+  <!-- Stripe.js（Checkout用） -->
+  <script src="https://js.stripe.com/v3"></script>
+</head>
+<body>
+  <header>
+    <h1>Appicel(アピセル)</h1>
+  </header>
+
+  <main class="viewport" id="viewport">
+    <div class="stage" id="stage">
+      <div class="grid" id="grid" aria-label="32x32 grid" role="grid"></div>
+    </div>
+  </main>
+
+  <div class="tip" id="tip"></div>
+
+  <!-- 詳細モーダル -->
+  <dialog id="detail" class="centered">
+    <div class="modal">
+      <header><h2>セル詳細 <small id="dCellId" style="opacity:.6; font-weight:500; margin-left:6px"></small></h2></header>
+      <div class="cover" id="dCover"></div>
+      <h3 id="dTitle">（無題）</h3>
+      <div id="dCoord" style="opacity:.7; font-size:12px"></div>
+      <div id="dDesc" class="desc"></div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+        <a class="btn" id="dOpenLink" href="#" target="_blank" rel="noopener" style="display:none">リンクを開く</a>
+        <button class="btn" id="dEdit">編集</button>
+        <button class="btn" id="dClose">閉じる</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- 編集モーダル -->
+  <dialog id="editor" class="centered">
+    <form method="dialog" class="modal">
+      <header><h2>セル作成 / 編集 <small id="cellId" style="opacity:.6; font-weight: 500; margin-left:6px"></small></h2></header>
+      <div class="row"><label for="owner">タイトル</label><input id="owner" type="text" maxlength="32" /></div>
+      <div class="row"><label for="imgFile">サムネ画像（ファイル選択）</label><input id="imgFile" type="file" accept="image/*" /><div class="hint">※ 画像は最長辺256pxに自動縮小・圧縮</div><div style="display:flex; gap:8px;"><button class="btn" type="button" id="clearUpload">アップロード画像をクリア</button></div></div>
+      <div class="row"><label for="url">リンクURL（任意）</label><input id="url" type="url" /></div>
+      <div class="row"><label for="desc">紹介文（最大1000字・改行可）</label><textarea id="desc" maxlength="1000"></textarea><div class="hint"><span id="descCount">0</span>/1000</div></div>
+      <div class="row"><label>枠の種類</label><div style="display:grid; gap:6px;">
+        <label><input type="radio" name="tier" value="normal" checked> 通常枠（灰）</label>
+        <label><input type="radio" name="tier" value="red"> <span style="color:#dc2626; font-weight:700;">■</span> 赤枠</label>
+        <label><input type="radio" name="tier" value="rainbow"> <span style="background: linear-gradient(90deg,#ff0040,#ffd100,#00e060,#00c0ff,#7a5cff,#ff00c8); -webkit-background-clip:text; color:transparent; font-weight:700;">■</span> 虹枠</label>
+      </div></div>
+      <div class="row"><label>レンタル期間</label><div id="periodSel" style="display:grid; gap:6px;">
+        <label><input type="radio" name="period" value="1d" checked> 1日</label>
+        <label><input type="radio" name="period" value="7d"> 7日</label>
+        <label><input type="radio" name="period" value="30d"> 30日</label>
+      </div><div class="hint">※ 保存時刻から個別にカウントし、満了で即消去（決済は未連動）</div></div>
+      <div class="actions" style="display:flex; gap:8px; justify-content:space-between; align-items:center;">
+        <button class="btn" id="deleteCell" type="button">このセルを空に</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" value="cancel">キャンセル</button>
+          <button class="btn" id="checkoutBtn" type="button">決済へ</button>
+          <button class="btn" id="saveCell" value="default">保存</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const $=(s)=>document.querySelector(s);
+    const GRID_N=32, DUR={ '1d':86400, '7d':86400*7, '30d':86400*30 };
+
+    const grid=$('#grid'), tip=$('#tip');
+    const detail=$('#detail'), dTitle=$('#dTitle'), dCoord=$('#dCoord'), dOpenLink=$('#dOpenLink'), dCellId=$('#dCellId'), dEdit=$('#dEdit'), dClose=$('#dClose'), dCover=$('#dCover'), dDesc=$('#dDesc');
+    const editor=$('#editor'), ownerInput=$('#owner'), imgFileInput=$('#imgFile'), clearUploadBtn=$('#clearUpload'), urlInput=$('#url'), descInput=$('#desc'), descCount=$('#descCount'), cellIdLabel=$('#cellId'), deleteBtn=$('#deleteCell'), saveBtn=$('#saveCell');
+    const stage=$('#stage'), viewport=$('#viewport');
+
+    // ストレージ（旧キーから移行）
+    function load(){ try{ const old=localStorage.getItem('pixelWallFan32'); const neu=localStorage.getItem('apicelFan32'); if(!neu && old){ localStorage.setItem('apicelFan32', old); } return JSON.parse(localStorage.getItem('apicelFan32')||'{}'); }catch(e){ return {}; } }
+    function persist(){ try{ localStorage.setItem('apicelFan32', JSON.stringify(data)); }catch(e){ alert('保存に失敗しました。'); } }
+
+    let data=load(); let currentKey=null; let scale=1, offsetX=0, offsetY=0; let isDragging=false, dragStartX=0, dragStartY=0, startOX=0, startOY=0, dragMoved=false, suppressClick=false; let tempUploadData=null;
+
+    function init(){
+      document.documentElement.style.setProperty('--grid-size', GRID_N);
+      renderGrid();
+      purgeExpired();
+      setInterval(purgeExpired, 30000);
+      autoFit();
+      bindViewport();
+      bindGrid();
+      bindEditor();
+    }
+
+    // グリッド描画
+    function renderGrid(){
+      const frag=document.createDocumentFragment();
+      for(let y=0;y<GRID_N;y++){
+        for(let x=0;x<GRID_N;x++){
+          const key=`${x},${y}`;
+          const cell=document.createElement('div');
+          cell.className='cell tier-normal';
+          cell.tabIndex=0; cell.setAttribute('role','gridcell');
+          cell.dataset.x=x; cell.dataset.y=y; cell.dataset.key=key;
+          const v=data[key];
+          if(v){
+            cell.dataset.owner=v.t||'';
+            applyTier(cell, normalizeTier(v.tier));
+            const src=v.imgData||v.img;
+            if(src){ const im=document.createElement('img'); im.className='thumb'; im.src=src; im.alt=v.t||''; cell.appendChild(im); }
+            else { const txt=document.createElement('div'); txt.className='txt'; txt.textContent=fitText(v.t||''); cell.appendChild(txt); }
+          }else{
+            const txt=document.createElement('div'); txt.className='txt'; cell.appendChild(txt);
+          }
+          frag.appendChild(cell);
+        }
+      }
+      grid.replaceChildren(frag);
+    }
+
+    function fitText(t){ if(!t) return ''; const s=t.trim(); return s.length<=2? s: s.slice(0,2); }
+    function normalizeTier(t){ return t==='gold'? 'rainbow': (t||'normal'); }
+    function applyTier(el,tier){ el.classList.remove('tier-normal','tier-red','tier-rainbow'); if(tier==='rainbow') el.classList.add('tier-rainbow'); else if(tier==='red') el.classList.add('tier-red'); else el.classList.add('tier-normal'); }
+
+    // 期限切れ掃除
+    function purgeExpired(){ const now=Date.now(); let changed=false; for(const k in data){ const v=data[k]; if(!v?.createdAt||!v?.durationSec) continue; if(now - v.createdAt >= v.durationSec*1000){ delete data[k]; changed=true; } } if(changed){ persist(); renderGrid(); } }
+
+    // クリック（詳細/作成）＋ツールチップ
+    function bindGrid(){
+      grid.addEventListener('click', (e)=>{
+        if(suppressClick){ suppressClick=false; return; }
+        const cell=e.target.closest('.cell'); if(!cell) return;
+        const key=cell.dataset.key; currentKey=key;
+        const v=data[key];
+        if(v){
+          dTitle.textContent=v.t||'（無題）';
+          dCoord.textContent=`座標: (${cell.dataset.x}, ${cell.dataset.y})`;
+          dCellId.textContent=`(${cell.dataset.x}, ${cell.dataset.y})`;
+          const coverSrc=v.imgData||v.img; dCover.innerHTML='';
+          if(coverSrc){ const img=new Image(); img.src=coverSrc; img.alt='cover'; dCover.appendChild(img);} else { const div=document.createElement('div'); div.style.opacity='.5'; div.textContent='（サムネなし）'; dCover.appendChild(div);} 
+          dDesc.textContent=v.desc||'';
+          if(v.url){ dOpenLink.href=v.url; dOpenLink.style.display='inline-flex'; } else { dOpenLink.style.display='none'; }
+          dEdit.onclick=()=> openEditorForKey(key);
+          dClose.onclick=()=> detail.close();
+          detail.showModal();
+        } else {
+          openEditorForKey(key);
+        }
+      });
+
+      grid.addEventListener('pointermove', (e)=>{
+        const cell=e.target.closest('.cell');
+        if(!cell){ tip.classList.remove('show'); return; }
+        const v=data[cell.dataset.key];
+        if(!v){ tip.classList.remove('show'); return; }
+        tip.textContent=v.t||'';
+        tip.style.left=(e.clientX+12)+'px';
+        tip.style.top=(e.clientY+12)+'px';
+        tip.classList.add('show');
+      });
+      grid.addEventListener('pointerleave', ()=> tip.classList.remove('show'));
+    }
+
+    // エディタ
+    function openEditorForKey(key){
+      currentKey=key;
+      const v=data[key]||{ t:'', img:'', imgData:'', url:'', desc:'', tier:'normal', createdAt:null, durationSec:null };
+      ownerInput.value=v.t||'';
+      urlInput.value=v.url||'';
+      descInput.value=v.desc||''; descCount.textContent=(v.desc||'').length;
+      tempUploadData=v.imgData||null; if(imgFileInput) imgFileInput.value='';
+      const vTier=normalizeTier(v.tier); editor.querySelectorAll('input[name="tier"]').forEach(r=> r.checked=(r.value===vTier));
+      let guess='1d'; if(v.durationSec===DUR['7d']) guess='7d'; else if(v.durationSec===DUR['30d']) guess='30d';
+      editor.querySelectorAll('input[name="period"]').forEach(r=> r.checked=(r.value===guess));
+      const [x,y]=key.split(','); cellIdLabel.textContent=`(${x}, ${y})`;
+      editor.showModal(); ownerInput.focus();
+    }
+
+    function bindEditor(){
+      imgFileInput?.addEventListener('change', async (e)=>{
+        const file=e.target.files?.[0]; if(!file){ tempUploadData=null; return; }
+        try{ tempUploadData=await readAndCompressImage(file,256,0.85);}catch(err){ alert('画像の読み込み/圧縮に失敗しました'); tempUploadData=null; }
+      });
+      clearUploadBtn?.addEventListener('click', ()=>{ tempUploadData=null; if(imgFileInput) imgFileInput.value=''; });
+      const MAX_DESC=1000; descInput?.addEventListener('input', ()=>{ if(descInput.value.length>MAX_DESC){ descInput.value=descInput.value.slice(0,MAX_DESC);} descCount.textContent=descInput.value.length; });
+      deleteBtn.addEventListener('click', ()=>{ if(currentKey){ delete data[currentKey]; persist(); updateCell(currentKey); } editor.close(); });
+      saveBtn.addEventListener('click', ()=>{
+        if(!currentKey) return;
+        const t=(ownerInput.value||'').trim();
+        const url=(urlInput.value||'').trim();
+        const desc=(descInput.value||'').slice(0,1000);
+        const tier=normalizeTier(editor.querySelector('input[name="tier"]:checked')?.value||'normal');
+        const period=editor.querySelector('input[name="period"]:checked')?.value||'1d';
+        if(!t && !tempUploadData){ delete data[currentKey]; }
+        else{ const now=Date.now(); const durationSec=DUR[period]||DUR['1d']; data[currentKey]={ t, img:'', imgData: tempUploadData||null, url, desc, tier, createdAt: now, durationSec }; }
+        persist(); updateCell(currentKey); editor.close();
+      });
+    }
+
+    function updateCell(key){
+      const cell=grid.querySelector(`.cell[data-key="${CSS.escape(key)}"]`);
+      if(!cell) return;
+      const v=data[key];
+      cell.innerHTML='';
+      if(v){
+        cell.dataset.owner=v.t||''; applyTier(cell, normalizeTier(v.tier));
+        const src=v.imgData||v.img;
+        if(src){ const im=document.createElement('img'); im.className='thumb'; im.src=src; im.alt=v.t||''; cell.appendChild(im); }
+        else { const txt=document.createElement('div'); txt.className='txt'; txt.textContent=fitText(v.t||''); cell.appendChild(txt); }
+        if(v.url){ cell.onclick=(e)=>{ if(e.metaKey||e.ctrlKey) window.open(v.url,'_blank'); }; } else { cell.onclick=null; }
+      } else {
+        cell.removeAttribute('data-owner'); applyTier(cell,'normal'); cell.onclick=null; const txt=document.createElement('div'); txt.className='txt'; cell.appendChild(txt);
+      }
+    }
+
+    // ビューポート（ホイールでズーム、ドラッグでパン）
+    function applyTransform(){ stage.style.transform=`translate(${offsetX}px, ${offsetY}px) scale(${scale})`; }
+    function autoFit(){
+      const cs=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell'))||18;
+      const gp=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'))||1;
+      const baseW=GRID_N*cs + (GRID_N-1)*gp + 2*gp;
+      const baseH=GRID_N*cs + (GRID_N-1)*gp + 2*gp;
+      const vw=viewport.clientWidth, vh=viewport.clientHeight;
+      const fitScale=Math.max(0.2, Math.min(3, Math.min(vw/baseW, vh/baseH)));
+      scale=fitScale; offsetX=(vw - baseW*scale)/2; offsetY=(vh - baseH*scale)/2;
+      applyTransform();
+    }
+    function bindViewport(){
+      // マウスホイールズーム
+      viewport.addEventListener('wheel', (e)=>{
+        e.preventDefault();
+        const factor=e.deltaY>0?0.9:1.1;
+        const rect=viewport.getBoundingClientRect();
+        const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+        const beforeX=(mx-offsetX)/scale, beforeY=(my-offsetY)/scale;
+        const newScale=Math.min(3, Math.max(0.2, scale*factor));
+        scale=newScale; offsetX=mx - beforeX*scale; offsetY=my - beforeY*scale; applyTransform();
+      }, {passive:false});
+
+      // ドラッグでパン
+      viewport.addEventListener('mousedown', (e)=>{ if(e.button!==0) return; isDragging=true; dragMoved=false; dragStartX=e.clientX; dragStartY=e.clientY; startOX=offsetX; startOY=offsetY; viewport.style.cursor='grabbing'; });
+      window.addEventListener('mousemove', (e)=>{ if(!isDragging) return; const dx=e.clientX-dragStartX, dy=e.clientY-dragStartY; if(!dragMoved && Math.hypot(dx,dy)>3) dragMoved=true; offsetX=startOX+dx; offsetY=startOY+dy; applyTransform(); });
+      window.addEventListener('mouseup', ()=>{ if(isDragging){ isDragging=false; viewport.style.cursor=''; if(dragMoved) suppressClick=true; } });
+
+      // タッチ（モバイル）ピンチズーム対応（簡易）
+      let lastDist=null;
+      viewport.addEventListener('touchstart', (e)=>{ if(e.touches.length===2){ lastDist=dist(e.touches[0], e.touches[1]); } }, {passive:true});
+      viewport.addEventListener('touchmove', (e)=>{
+        if(e.touches.length===2){
+          e.preventDefault();
+          const d=dist(e.touches[0], e.touches[1]);
+          if(lastDist){ const factor=d/lastDist; const rect=viewport.getBoundingClientRect(); const mx=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left; const my=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top; const beforeX=(mx-offsetX)/scale, beforeY=(my-offsetY)/scale; const newScale=Math.min(3, Math.max(0.2, scale*factor)); scale=newScale; offsetX=mx - beforeX*scale; offsetY=my - beforeY*scale; applyTransform(); }
+          lastDist=d;
+        }
+      }, {passive:false});
+      window.addEventListener('resize', autoFit);
+
+      function dist(a,b){ const dx=a.clientX-b.clientX, dy=a.clientY-b.clientY; return Math.hypot(dx,dy); }
+    }
+
+    // 画像圧縮
+    function readAndCompressImage(file, maxEdge=256, quality=0.85){
+      return new Promise((resolve,reject)=>{
+        if(!file.type.startsWith('image/')) return reject(new Error('not image'));
+        const fr=new FileReader();
+        fr.onload=()=>{ const img=new Image(); img.onload=()=>{ const w=img.naturalWidth,h=img.naturalHeight; let nw=w,nh=h; if(Math.max(w,h)>maxEdge){ if(w>=h){ nw=maxEdge; nh=Math.round(h*(maxEdge/w)); } else { nh=maxEdge; nw=Math.round(w*(maxEdge/h)); } } const cv=document.createElement('canvas'); cv.width=nw; cv.height=nh; const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,nw,nh); try{ const out=cv.toDataURL('image/jpeg', quality); resolve(out);}catch(e){ reject(e);} }; img.onerror=()=>reject(new Error('image error')); img.src=fr.result; };
+        fr.onerror=()=>reject(new Error('read error'));
+        fr.readAsDataURL(file);
+      });
+    }
+
+    // ====== 決済（Stripe Checkout） ======
+    document.getElementById('checkoutBtn')?.addEventListener('click', startCheckout);
+    async function startCheckout(){
+      if(!currentKey){ alert('セルを選択してください'); return; }
+      const t = (ownerInput.value||'').trim();
+      const tier = (editor.querySelector('input[name="tier"]:checked')?.value) || 'normal';
+      const period = (editor.querySelector('input[name="period"]:checked')?.value) || '1d';
+      try{
+        const res = await fetch('/.netlify/functions/create-checkout-session', {
+          method: 'POST', headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ tier, period, cellKey: currentKey, title: t })
+        });
+        const json = await res.json();
+        if(json?.url){ window.location.href = json.url; }
+        else{ alert('決済セッションの作成に失敗しました'); }
+      }catch(err){ console.error(err); alert('サーバーエラーが発生しました'); }
+    }
+
+    // ====== 起動 ======
+    init();
+  </script>
+</body>
+</html>
+
