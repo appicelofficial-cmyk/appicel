@@ -14,26 +14,85 @@
 <body>
   <div class="box">
     <h1>決済が完了しました。ありがとうございます！</h1>
-    <p>購入内容を確認し、トップに戻れます。</p>
+    <p>購入内容を反映します。数秒後にトップへ戻ります。</p>
     <div id="info" class="meta">検証中...</div>
-    <div class="actions"><a class="btn" href="/">トップへ戻る</a></div>
+    <div class="actions">
+      <a class="btn" href="/">トップへ戻る</a>
+    </div>
   </div>
+
   <script>
     (async function(){
+      const DUR = { '1d': 86400, '7d': 86400*7, '30d': 86400*30 };
+
       const q = new URLSearchParams(location.search);
       const session_id = q.get('session_id');
       if(!session_id){ document.getElementById('info').textContent = 'セッションIDが見つかりません。'; return; }
+
       try{
         const res = await fetch('/.netlify/functions/retrieve-session?session_id=' + encodeURIComponent(session_id));
         const json = await res.json();
+
         if(json.paid){
           const md = json.metadata || {};
+          const key = md.cellKey || '';
+          const tier = md.tier || 'normal';
+          const periodKey = md.period || '1d';
+
+          // ① 決済前に保存しておいた pending データを読む
+          let pending = null;
+          try{ pending = JSON.parse(sessionStorage.getItem('appicel:pending:' + key) || 'null'); }catch(_){}
+
+          // ② 反映先（ローカル保存）を読む
+          let store = {};
+          try{ store = JSON.parse(localStorage.getItem('pixelWallFan32') || '{}'); }catch(_){}
+
+          // ③ pending があればそれを優先して確定保存
+          if(pending){
+            pending.tier = pending.tier || tier;
+            pending.periodKey = pending.periodKey || periodKey;
+            pending.durationSec = pending.durationSec || DUR[periodKey] || DUR['1d'];
+            pending.createdAt = Date.now();
+            store[key] = {
+              t: pending.t || '',
+              img: pending.img || '',
+              imgData: pending.imgData || null,
+              url: pending.url || '',
+              desc: pending.desc || '',
+              tier: pending.tier,
+              createdAt: pending.createdAt,
+              durationSec: pending.durationSec
+            };
+          } else if (key) {
+            // pending が無い場合でも、最低限メタデータで作成
+            store[key] = {
+              t: md.title || '（無題）',
+              img: '',
+              imgData: null,
+              url: '',
+              desc: '',
+              tier,
+              createdAt: Date.now(),
+              durationSec: DUR[periodKey] || DUR['1d']
+            };
+          }
+
+          // ④ 保存＆クリーンアップ
+          try{
+            localStorage.setItem('pixelWallFan32', JSON.stringify(store));
+            if(key) sessionStorage.removeItem('appicel:pending:' + key);
+          }catch(_){}
+
           document.getElementById('info').textContent =
-            `支払い済み｜セル: ${md.cellKey || '(未指定)'} / 枠: ${md.tier || ''} / 期間: ${md.period || ''}`;
+            `支払い済み｜反映対象: ${key || '(未指定)'} / ${tier} / ${periodKey}`;
+          // ⑤ 数秒後にトップへ戻る
+          setTimeout(()=>{ location.href = '/'; }, 1500);
+
         }else{
           document.getElementById('info').textContent = '未決済か検証に失敗しました。';
         }
       }catch(e){
+        console.error(e);
         document.getElementById('info').textContent = '検証エラーが発生しました。';
       }
     })();
