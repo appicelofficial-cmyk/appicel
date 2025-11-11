@@ -51,5 +51,36 @@
   if (pending) sessionStorage.removeItem('appicel:pending:' + key);
   location.href = '/';
 })();
+const cellKey = data?.metadata?.cellKey;
+if (cellKey) {
+  // データ反映
+  localStorage.setItem('pixelWallFan32', JSON.stringify({
+    ...JSON.parse(localStorage.getItem('pixelWallFan32') || '{}'),
+    [cellKey]: {
+      t: data.metadata.title || '',
+      tier: data.metadata.tier || 'normal',
+      period: data.metadata.period || '',
+      img: '',
+      imgData: null,
+      url: '',
+      desc: ''
+    }
+  }));
+
+  // グリッド更新＆視覚エフェクト
+  try {
+    updateCell && updateCell(cellKey);
+    renderGrid && renderGrid();
+    const el = document.querySelector(`.cell[data-key="${cellKey}"]`);
+    if (el) {
+      el.style.transition = 'box-shadow .25s';
+      el.style.boxShadow = '0 0 0 3px rgba(220,38,38,.8)';
+      setTimeout(() => (el.style.boxShadow = ''), 1200);
+    }
+  } catch (err) {
+    console.warn('セルの自動反映に失敗:', err);
+  }
+}
 </script>
+
 
