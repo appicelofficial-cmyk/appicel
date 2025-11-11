@@ -1,36 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>購入完了</title>
+</head>
+<body>
+
+<div id="result">読み込み中...</div>
+
 <script>
+// ✅ 購入完了ページ処理
 async function handleSuccess() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const sessionId = urlParams.get("session_id");
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get("session_id");
 
   if (!sessionId) {
-    console.log("session_id が見つかりません。");
+    document.getElementById("result").innerHTML = "<p>session_id が見つかりません</p>";
     return;
   }
 
-  const res = await fetch(`/.netlify/functions/retrieve?session_id=${sessionId}`);
+  console.log("session=", sessionId);
+
+  // ✅ 関数名は retrieve-session（超重要）
+  const res = await fetch(`/.netlify/functions/retrieve-session?session_id=${sessionId}`);
   const data = await res.json();
 
-  // 🔴 セッションが無効な場合（期限切れや再利用時）
+  // ✅ セッション無効
   if (data.error?.code === "checkout_not_active_session") {
-    document.body.innerHTML = `
-      <h2 style="color:red;">この決済セッションは期限切れです。</h2>
-      <p>もう一度購入ページからお試しください。</p>
+    document.getElementById("result").innerHTML = `
+      <h2 style="color:red">この決済セッションは期限切れです。</h2>
+      <p>もう一度購入ページからお願いします。</p>
     `;
-    console.warn("Stripeセッションが無効:", data.error.message);
+    console.warn("Stripeセッション無効:", data.error.message);
     return;
   }
 
+  console.log("戻り値:", data);
+
   // ✅ 決済成功時
-  if (data.paid) {
-    console.log("決済成功:", data.metadata);
+  if (data.paid && data.metadata) {
+    document.getElementById("result").innerHTML = `
+      <h2>購入が完了しました！</h2>
+      <p>枠: ${data.metadata.cellKey}</p>
+      <p>タイトル: ${data.metadata.title}</p>
+    `;
+
+    // ✅ セル反映
     updateCell(data.metadata.cellKey, data.metadata);
-  } else {
-    console.log("未決済または情報不完全:", data);
+  }
+  else {
+    document.getElementById("result").innerHTML = "<p>決済は完了していません。</p>";
   }
 }
 
-// ページ読み込み時に実行
+// ✅ セルを更新する関数（index.html と同じ）
+function updateCell(cellKey, metadata) {
+  const stored = JSON.parse(localStorage.getItem("cells") || "{}");
+
+  stored[cellKey] = {
+    t: metadata.title || "",
+    img: metadata.img || "",
+    imgData: null,
+    url: metadata.url || "",
+    desc: metadata.desc || "",
+  };
+
+  localStorage.setItem("cells", JSON.stringify(stored));
+  console.log("✅ セル更新完了:", cellKey);
+}
+
 handleSuccess();
 </script>
 
+</body>
+</html>
