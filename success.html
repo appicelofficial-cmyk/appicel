@@ -1,86 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>決済完了 – Appicel</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; margin: 0; padding: 24px; background: #fff; color: #111827; }
+    .box { max-width: 760px; margin: 24px auto; padding: 20px; border: 1px solid #e6e9ee; border-radius: 12px; box-shadow: 0 6px 18px rgba(15,23,42,0.04); }
+    h1 { margin: 0 0 8px; font-size: 20px; }
+    .meta { color: #6b7280; font-size: 14px; margin-bottom: 12px; }
+    pre { background:#f8fafc; padding:12px; border-radius:8px; overflow:auto; max-height:280px; border:1px solid #eef2f7; }
+    .actions { margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; }
+    .btn { display:inline-block; padding:10px 14px; border-radius:8px; text-decoration:none; color:#111827; border:1px solid #e6e9ee; background:#fff; cursor:pointer; }
+    .btn.primary { background:#10b981; color:white; border-color: transparent; }
+    .warning { color:#b91c1c; font-weight:600; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>決済処理中 — Appicel</h1>
+    <div id="status" class="meta">支払い情報を検証しています…</div>
+
+    <div id="debugArea"></div>
+
+    <div class="actions">
+      <a class="btn" id="btnHome" href="/">トップへ戻る</a>
+      <button class="btn" id="btnTryCheck">再検証（手動）</button>
+      <button class="btn" id="btnForceApply">手動で反映（デバッグ）</button>
+      <span id="note" style="margin-left:8px;color:#6b7280;font-size:13px"></span>
+    </div>
+  </div>
+
 <script>
-(async () => {
+/*
+  success.html (Appicel)
+  - retrieve-session を呼んで paid/metadata を取得
+  - pending(sessionStorage) があれば優先して localStorage に確定保存
+  - 保存後に updateCell/renderGrid を呼んで即反映（あれば）
+  - AUTO_REDIRECT: true にすると反映後に自動でトップへ戻ります
+*/
+
+(async function(){
+  const AUTO_REDIRECT = true;      // 自動でトップへ戻すか（デバッグ中は false に）
+  const REDIRECT_DELAY = 1400;     // ms
   const DUR = { '1d': 86400, '7d': 86400*7, '30d': 86400*30 };
-  const sid = new URLSearchParams(location.search).get('session_id');
-  if (!sid) { console.warn('no session_id'); return; }
 
-  // 決済情報を取得
-  const res = await fetch('/.netlify/functions/retrieve-session?session_id=' + encodeURIComponent(sid));
-  const json = await res.json().catch(()=>null);
-  if (!json) { alert('検証エラー'); return; }
+  const $ = (sel) => document.querySelector(sel);
+  const statusEl = $('#status');
+  const debugArea = $('#debugArea');
+  const btnTry = $('#btnTryCheck');
+  const btnForce = $('#btnForceApply');
+  const note = $('#note');
 
-  const paid   = !!json.paid;
-  const md     = json.metadata || {};
-  const key    = md.cellKey || '';
-  const tier   = md.tier || 'normal';
-  const period = md.period || '1d';
-  const title  = md.title || '（無題）';
+  function showDebug(obj){
+    debugArea.innerHTML = '';
+    const pre = document.createElement('pre');
+    try { pre.textContent = JSON.stringify(obj, null, 2); } catch(e){ pre.textContent = String(obj); }
+    debugArea.appendChild(pre);
+  }
 
-  // pending（編集画面で保存しておいた一時データ）を拾う：無ければmetadataだけで保存
-  let pending = null;
-  try { pending = JSON.parse(sessionStorage.getItem('appicel:pending:' + key) || 'null'); } catch {}
+  function info(text){ statusEl.textContent = text; }
+  function warn(text){ statusEl.innerHTML = `<span class="warning">${text}</span>`; }
 
-  if (!key) { alert('cellKeyが空です'); return; }
-  if (!paid) { alert('未決済のため反映しません'); return; }
+  const q = new URLSearchParams(location.search);
+  const session_id = q.get('session_id');
+  if(!session_id){
+    warn('セッションIDが見つかりません。URLに ?session_id=... が必要です。');
+    note.textContent = '（手動でトップに戻るか、再度決済してください）';
+    return;
+  }
 
-  let store = {};
-  try { store = JSON.parse(localStorage.getItem('pixelWallFan32') || '{}'); } catch {}
+  async function fetchSession(sid){
+    info('Stripe セッションを検証しています…');
+    try{
+      const res = await fetch(`/.netlify/functions/retrieve-session?session_id=${encodeURIComponent(sid)}`);
+      if(!res.ok){
+        const txt = await res.text().catch(()=>'<no body>');
+        throw new Error(`関数エラー: ${res.status} ${txt}`);
+      }
+      const json = await res.json();
+      return json;
+    }catch(e){
+      console.error(e);
+      return { error: e.message || String(e) };
+    }
+  }
 
-  const data = pending ? {
-    t: pending.t || title,
-    img: pending.img || '',
-    imgData: pending.imgData || null,
-    url: pending.url || '',
-    desc: pending.desc || '',
-    tier: pending.tier || tier,
-    createdAt: Date.now(),
-    durationSec: pending.durationSec || DUR[period] || DUR['1d']
-  } : {
-    t: title,
-    img: '',
-    imgData: null,
-    url: '',
-    desc: '',
-    tier,
-    createdAt: Date.now(),
-    durationSec: DUR[period] || DUR['1d']
-  };
+  function applyToLocal(key, meta, pending){
+    // localStorage 読み込み
+    let store = {};
+    try{ store = JSON.parse(localStorage.getItem('pixelWallFan32') || '{}'); }catch(_){}
+    const periodKey = meta.period || (pending && pending.periodKey) || '1d';
+    const tier = meta.tier || (pending && pending.tier) || 'normal';
+    const title = meta.title || (pending && pending.t) || '（無題）';
+    const durationSec = (pending && pending.durationSec) || DUR[periodKey] || DUR['1d'];
 
-  store[key] = data;
-  localStorage.setItem('pixelWallFan32', JSON.stringify(store));
-  if (pending) sessionStorage.removeItem('appicel:pending:' + key);
-  location.href = '/';
-})();
-const cellKey = data?.metadata?.cellKey;
-if (cellKey) {
-  // データ反映
-  localStorage.setItem('pixelWallFan32', JSON.stringify({
-    ...JSON.parse(localStorage.getItem('pixelWallFan32') || '{}'),
-    [cellKey]: {
-      t: data.metadata.title || '',
-      tier: data.metadata.tier || 'normal',
-      period: data.metadata.period || '',
-      img: '',
+    const record = pending ? {
+      t: pending.t || title,
+      img: pending.img || meta.img || '',
+      imgData: pending.imgData || null,
+      url: pending.url || '',
+      desc: pending.desc || '',
+      tier: pending.tier || tier,
+      createdAt: Date.now(),
+      durationSec
+    } : {
+      t: title,
+      img: meta.img || '',
       imgData: null,
       url: '',
-      desc: ''
-    }
-  }));
+      desc: '',
+      tier,
+      createdAt: Date.now(),
+      durationSec
+    };
 
-  // グリッド更新＆視覚エフェクト
-  try {
-    updateCell && updateCell(cellKey);
-    renderGrid && renderGrid();
-    const el = document.querySelector(`.cell[data-key="${cellKey}"]`);
-    if (el) {
-      el.style.transition = 'box-shadow .25s';
-      el.style.boxShadow = '0 0 0 3px rgba(220,38,38,.8)';
-      setTimeout(() => (el.style.boxShadow = ''), 1200);
+    store[key] = record;
+
+    try{
+      localStorage.setItem('pixelWallFan32', JSON.stringify(store));
+      console.log('localStorage に保存しました:', key, record);
+      return true;
+    }catch(e){
+      console.error('localStorage 保存失敗', e);
+      return false;
     }
-  } catch (err) {
-    console.warn('セルの自動反映に失敗:', err);
   }
-}
+
+  function highlightAndUpdate(key){
+    try{
+      // 関数があれば呼び出す
+      if(typeof updateCell === 'function') updateCell(key);
+      if(typeof renderGrid === 'function') renderGrid();
+
+      // DOM に直接手を入れて視覚効果（関数がない環境でも判るように）
+      const el = document.querySelector(`.cell[data-key="${key}"]`);
+      if(el){
+        el.style.transition = 'box-shadow .25s, transform .25s';
+        el.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.9)';
+        el.style.transform = 'scale(1.02)';
+        setTimeout(()=>{ el.style.boxShadow=''; el.style.transform=''; }, 1200);
+      }
+    }catch(e){
+      console.warn('UI 更新エラー', e);
+    }
+  }
+
+  async function process(){
+    const json = await fetchSession(session_id);
+    showDebug(json);
+
+    if(json.error){
+      warn('検証中にエラーが発生しました。Console を確認してください。');
+      console.error('retrieve-session error', json.error);
+      return;
+    }
+
+    const paid = !!json.paid;
+    const meta = json.metadata || {};
+    const key = meta.cellKey || '';
+
+    info(`検証結果: paid=${paid} / cell=${key} / tier=${meta.tier || ''} / period=${meta.period || ''}`);
+
+    // pending（決済前に保存しておいたもの）
+    let pending = null;
+    try{ pending = JSON.parse(sessionStorage.getItem('appicel:pending:' + key) || 'null'); }catch(_){ pending = null; }
+
+    // 自動反映する条件：paid === true
+    if(paid && key){
+      const ok = applyToLocal(key, meta, pending);
+      if(ok){
+        highlightAndUpdate(key);
+        info('決済確認済み：セルを反映しました。');
+        if(pending) try{ sessionStorage.removeItem('appicel:pending:' + key); }catch(_){}
+        if(AUTO_REDIRECT){
+          setTimeout(()=>{ location.href = '/'; }, REDIRECT_DELAY);
+        }
+      } else {
+        warn('保存失敗：localStorage に書き込めませんでした（容量などを確認）。');
+      }
+    } else {
+      // 未決済 or keyが無い
+      warn('未決済かメタ情報が不足しています。手動反映できます。');
+      // ボタンで手動反映を有効にする（metadataの有無にかかわらず動く）
+    }
+
+    return json;
+  }
+
+  // 初回実行
+  let lastJson = await process();
+
+  // 手動再検証ボタン
+  btnTry.addEventListener('click', async ()=>{
+    info('手動で再検証しています...');
+    lastJson = await process();
+  });
+
+  // 強制反映（デバッグ）ボタン
+  btnForce.addEventListener('click', ()=>{
+    try{
+      const json = lastJson || {};
+      const meta = json.metadata || {};
+      const key = meta.cellKey || prompt('反映したい cellKey を入力してください（例: 13,17）');
+      if(!key){ alert('キーが指定されていません'); return; }
+      const pending = (()=>{ try{ return JSON.parse(sessionStorage.getItem('appicel:pending:' + key) || 'null'); }catch(_){return null;} })();
+      const ok = applyToLocal(key, meta, pending);
+      if(ok){
+        highlightAndUpdate(key);
+        alert('手動で反映しました（ローカルに保存済み）');
+        if(pending) try{ sessionStorage.removeItem('appicel:pending:' + key); }catch(_){}
+        if(AUTO_REDIRECT) setTimeout(()=>{ location.href = '/'; }, REDIRECT_DELAY);
+      } else {
+        alert('保存に失敗しました。Console を確認してください。');
+      }
+    }catch(e){ console.error(e); alert('エラー: ' + e.message); }
+  });
+
+})();
 </script>
-
-
+</body>
+</html>
