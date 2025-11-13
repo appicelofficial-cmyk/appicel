@@ -339,7 +339,35 @@
 
     // ====== 起動 ======
     init();
+  // ======== success.html → トップ戻り後の自動反映機能 ========
+
+// localStorage変更を反映
+function reloadFromStorage(){
+  try {
+    data = load();
+    renderGrid();
+    updateStats();
+  } catch(e) {
+    console.warn('reloadFromStorage error', e);
+  }
+}
+
+// 戻る・フォーカス時・定期でリロード
+window.addEventListener('pageshow', reloadFromStorage);
+window.addEventListener('focus', reloadFromStorage);
+
+// 最後の保険：1秒ごとにlocalStorage変化を監視
+let __lastStore = null;
+setInterval(()=>{
+  const cur = localStorage.getItem('pixelWallFan32') || '';
+  if(cur !== __lastStore){
+    __lastStore = cur;
+    reloadFromStorage();
+  }
+}, 1000);
+
   </script>
 </body>
 </html>
+
 
