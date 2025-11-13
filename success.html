@@ -3,24 +3,65 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>決済成功 | Appicel</title>
+  <title>決済完了 | Appicel</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;background:#fff;color:#111}
-    main{max-width:720px;margin:48px auto;padding:0 16px}
-    .ok{background:#ecfdf5;border:1px solid #10b98129;color:#065f46;border-radius:12px;padding:16px}
-    .ng{background:#fff5f5;border:1px solid #ef444429;color:#7f1d1d;border-radius:12px;padding:16px}
-    a.btn{display:inline-block;margin-top:12px;border-radius:10px;border:1px solid #1112;padding:10px 14px;text-decoration:none}
-    .muted{opacity:.6;font-size:12px}
-    pre{background:#f8fafc;border:1px solid #e5e7eb;padding:12px;border-radius:8px;overflow:auto}
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #fff;
+      color: #111;
+      margin: 0;
+      padding: 0;
+    }
+    main {
+      max-width: 720px;
+      margin: 60px auto;
+      padding: 0 16px;
+      text-align: center;
+    }
+    .ok {
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1px solid #10b98140;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .ng {
+      background: #fff5f5;
+      color: #7f1d1d;
+      border: 1px solid #ef444440;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 16px;
+      border-radius: 10px;
+      border: 1px solid #1113;
+      padding: 10px 14px;
+      text-decoration: none;
+      color: #111;
+    }
+    .muted {
+      opacity: .6;
+      font-size: 12px;
+    }
+    pre {
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      padding: 10px;
+      border-radius: 8px;
+      overflow: auto;
+      text-align: left;
+    }
   </style>
 </head>
 <body>
 <main>
   <h1>決済が完了しました</h1>
-  <div id="msg" class="ok">反映処理をしています…（数秒お待ちください）</div>
-  <p><a class="btn" href="/">トップへ戻る</a></p>
+  <div id="msg" class="ok">反映処理中です…（数秒お待ちください）</div>
+  <a href="/" class="btn">トップに戻る</a>
   <details style="margin-top:16px">
-    <summary class="muted">デバッグ表示（開発者向け）</summary>
+    <summary class="muted">デバッグ情報（開発用）</summary>
     <pre id="debug"></pre>
   </details>
 </main>
@@ -29,77 +70,78 @@
 (async function handleSuccess(){
   const p = new URLSearchParams(location.search);
   const sessionId = p.get('session_id');
-  const $msg   = document.getElementById('msg');
-  const $debug = document.getElementById('debug');
+  const msg = document.getElementById('msg');
+  const debug = document.getElementById('debug');
 
   if(!sessionId){
-    $msg.className='ng';
-    $msg.innerHTML='session_id が見つかりません。';
+    msg.className = 'ng';
+    msg.textContent = 'session_id が見つかりません。';
     return;
   }
 
-  // ① Functions からセッション詳細を取得
   let data;
-  try{
+  try {
     const url = '/.netlify/functions/retrieve-session?session_id=' + encodeURIComponent(sessionId);
     const res = await fetch(url, { headers: { 'Accept': 'application/json' }});
     data = await res.json();
-    $debug.textContent = JSON.stringify(data, null, 2);
-  }catch(e){
-    $msg.className='ng';
-    $msg.textContent='サーバー応答の解析に失敗しました。';
+    debug.textContent = JSON.stringify(data, null, 2);
+  } catch(e) {
+    msg.className = 'ng';
+    msg.textContent = 'サーバー応答の解析に失敗しました。';
     return;
   }
 
-  // ② 期限切れ等のガード
+  // セッション切れ対応
   if (data?.error?.code === 'checkout_not_active_session') {
-    $msg.className='ng';
-    $msg.innerHTML = '<strong>この決済セッションは無効/期限切れです。</strong><br>恐れ入りますが、もう一度購入ページからお試しください。';
+    msg.className = 'ng';
+    msg.innerHTML = '<strong>この決済セッションは無効または期限切れです。</strong><br>もう一度購入ページからお試しください。';
     return;
   }
 
-  // ③ 決済済みか判定（paid or payment_status）
+  // 決済完了確認
   const isPaid = data.paid === true || data.payment_status === 'paid';
-  if (!isPaid || !data?.metadata){
-    $msg.className='ng';
-    $msg.textContent='未決済、またはメタデータ不足のため反映できませんでした。';
+  if (!isPaid || !data?.metadata) {
+    msg.className = 'ng';
+    msg.textContent = '未決済またはメタデータ不足のため反映できませんでした。';
     return;
   }
 
-  // ④ LocalStorage へ反映（トップの壁が読むフォーマット）
-  try{
+  // LocalStorage更新
+  try {
     const STORE_KEY = 'pixelWallFan32';
     const DUR = { '1d': 86400, '7d': 86400*7, '30d': 86400*30 };
-
     const db = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
 
-    const m = data.metadata || {};
-    const key = m.cellKey;               // 例: "13,17"
-    if(!key){ throw new Error('cellKey missing'); }
+    const m = data.metadata;
+    const key = m.cellKey;
+    if(!key) throw new Error('cellKey missing');
 
     const now = Date.now();
-    const rec = {
-      t: m.title || '',        // 表示名
-      img: '',                 // 画像URLは決済フローでは未使用（編集で追加想定）
+    db[key] = {
+      t: m.title || '',
+      img: '',
       imgData: null,
       url: m.url || '',
       desc: m.desc || '',
-      tier: m.tier || 'normal',         // normal | red | gold(=虹枠)
+      tier: m.tier || 'normal',
       createdAt: now,
       durationSec: DUR[m.period] || DUR['1d']
     };
 
-    db[key] = rec;
     localStorage.setItem(STORE_KEY, JSON.stringify(db));
 
-    // ⑤ 完了表示 & 自動戻り（任意）
-    $msg.className='ok';
-    $msg.innerHTML='セルへの反映が完了しました。トップに戻ると反映が見えます。<br><span class="muted">（自動で戻らない場合は上のボタンから戻ってください）</span>';
-    setTimeout(()=>{ location.href='/'; }, 1200);
-  }catch(err){
+    msg.className = 'ok';
+    msg.innerHTML = 'セルへの反映が完了しました！トップへ戻ります…';
+
+    // ✅ キャッシュを無視してリダイレクト（これが1の修正版）
+    setTimeout(() => {
+      location.replace('/?ts=' + Date.now());
+    }, 1200);
+
+  } catch(err) {
     console.error(err);
-    $msg.className='ng';
-    $msg.textContent='ローカル保存に失敗しました。ブラウザの保存容量を確認してください。';
+    msg.className = 'ng';
+    msg.textContent = 'ローカル保存に失敗しました。';
   }
 })();
 </script>
