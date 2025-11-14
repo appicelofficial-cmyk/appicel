@@ -327,7 +327,7 @@
       const tier = (editor.querySelector('input[name="tier"]:checked')?.value) || 'normal';
       const period = (editor.querySelector('input[name="period"]:checked')?.value) || '1d';
       try{
-        const res = await fetch('/.netlify/functions/create-checkout-session', {
+        const res = await fetch('/api/create-checkout-session', {
           method: 'POST', headers: { 'Content-Type':'application/json' },
           body: JSON.stringify({ tier, period, cellKey: currentKey, title: t })
         });
@@ -369,5 +369,6 @@ setInterval(()=>{
   </script>
 </body>
 </html>
+
 
 
