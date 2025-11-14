@@ -81,24 +81,23 @@
 
   let data;
   try {
-    const url = '/.netlify/functions/retrieve-session?session_id=' + encodeURIComponent(sessionId);
+    const url = '/api/retrieve-session?session_id=' + encodeURIComponent(sessionId);
     const res = await fetch(url, { headers: { 'Accept': 'application/json' }});
     data = await res.json();
     debug.textContent = JSON.stringify(data, null, 2);
   } catch(e) {
+    console.error(e);
     msg.className = 'ng';
     msg.textContent = 'サーバー応答の解析に失敗しました。';
     return;
   }
 
-  // セッション切れ対応
   if (data?.error?.code === 'checkout_not_active_session') {
     msg.className = 'ng';
     msg.innerHTML = '<strong>この決済セッションは無効または期限切れです。</strong><br>もう一度購入ページからお試しください。';
     return;
   }
 
-  // 決済完了確認
   const isPaid = data.paid === true || data.payment_status === 'paid';
   if (!isPaid || !data?.metadata) {
     msg.className = 'ng';
@@ -106,12 +105,10 @@
     return;
   }
 
-  // LocalStorage更新
   try {
     const STORE_KEY = 'pixelWallFan32';
     const DUR = { '1d': 86400, '7d': 86400*7, '30d': 86400*30 };
     const db = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-
     const m = data.metadata;
     const key = m.cellKey;
     if(!key) throw new Error('cellKey missing');
@@ -133,7 +130,7 @@
     msg.className = 'ok';
     msg.innerHTML = 'セルへの反映が完了しました！トップへ戻ります…';
 
-    // ✅ キャッシュを無視してリダイレクト（これが1の修正版）
+    // キャッシュを避けてトップへ戻る
     setTimeout(() => {
       location.replace('/?ts=' + Date.now());
     }, 1200);
