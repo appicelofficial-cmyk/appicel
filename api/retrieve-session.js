@@ -1,49 +1,38 @@
 // api/retrieve-session.js
-const Stripe = require('stripe');
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 /**
- * GET /api/retrieve-session?session_id=cs_...
+ * 決済セッション取得
+ * GET /api/retrieve-session?session_id=xxx
  */
-module.exports = async (req, res) => {
-  const q = req.query || {};
-  const sessionId = q.session_id;
+export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-  if (!sessionId) {
-    res.statusCode = 400;
-    return res.json({
-      error: { code: 'missing', message: 'session_id is required' }
-    });
+  const { session_id } = req.query || {};
+
+  if (!session_id) {
+    return res.status(400).json({ error: "session_id がありません" });
   }
 
   try {
-    const s = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['payment_intent', 'line_items']
-    });
+    const session = await stripe.checkout.sessions.retrieve(session_id);
 
-    const paid =
-      s.payment_status === 'paid' ||
-      (s.status === 'complete' && s.payment_status === 'paid');
-
-    res.statusCode = 200;
-    return res.json({
-      id: s.id,
-      status: s.status,
-      payment_status: s.payment_status,
-      amount_total: s.amount_total,
-      currency: s.currency,
-      metadata: s.metadata || null,
-      paid
+    return res.status(200).json({
+      id: session.id,
+      paid: session.payment_status === "paid",
+      amount_total: session.amount_total,
+      currency: session.currency,
+      metadata: session.metadata || {},
     });
   } catch (err) {
-    console.error('retrieve-session error:', err);
-    res.statusCode = err.statusCode || 500;
-    return res.json({
-      error: {
-        type: err.type || 'stripe_error',
-        code: err.code || 'unknown',
-        message: err.message || String(err)
-      }
+    console.error("retrieve-session error", err);
+    return res.status(500).json({
+      error: err.message || "Internal Server Error",
     });
   }
-};
+}
