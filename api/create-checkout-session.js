@@ -1,40 +1,50 @@
 // api/create-checkout-session.js
-const Stripe = require('stripe');
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 /**
+ * 決済セッション作成
  * POST /api/create-checkout-session
- * body: { priceId, metadata }
+ * body: { priceId, metadata: { cellKey, period, tier, title } }
  */
-module.exports = async (req, res) => {
-  // VercelのNode APIは req.method / req.body / req.query が使える
-  if (req.method !== 'POST') {
-    res.statusCode = 405;
-    return res.json({ error: 'Method Not Allowed' });
+export default async function handler(req, res) {
+  // POST 以外は拒否
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const body = req.body || {};
+    const { priceId, metadata } = req.body || {};
+
+    if (!priceId) {
+      return res.status(400).json({ error: "priceId がありません" });
+    }
+
+    // success / cancel URL は現在のドメインから組み立て
+    const origin = req.headers.origin || `https://${req.headers.host}`;
 
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: ['card'],
+      mode: "payment",
+      payment_method_types: ["card"],
       line_items: [
         {
-          price: body.priceId, // 例: price_XXXXXX
-          quantity: 1
-        }
+          price: priceId,
+          quantity: 1,
+        },
       ],
-      success_url: `${req.headers.origin}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.origin}/`,
-      metadata: body.metadata || {}
+      success_url: `${origin}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/`,
+      metadata: metadata || {},
     });
 
-    res.statusCode = 200;
-    return res.json({ id: session.id });
-  } catch (e) {
-    console.error('create-checkout-session error:', e);
-    res.statusCode = e.statusCode || 500;
-    return res.json({ error: e.message || 'server error' });
+    // フロント側はこの url にリダイレクト
+    return res.status(200).json({ id: session.id, url: session.url });
+  } catch (err) {
+    console.error("create-checkout-session error", err);
+    return res.status(500).json({
+      error: err.message || "Internal Server Error",
+    });
   }
-};
+}
