@@ -319,23 +319,84 @@
       });
     }
 
-    // ====== 決済（Stripe Checkout） ======
-    document.getElementById('checkoutBtn')?.addEventListener('click', startCheckout);
-    async function startCheckout(){
-      if(!currentKey){ alert('セルを選択してください'); return; }
-      const t = (ownerInput.value||'').trim();
-      const tier = (editor.querySelector('input[name="tier"]:checked')?.value) || 'normal';
-      const period = (editor.querySelector('input[name="period"]:checked')?.value) || '1d';
-      try{
-        const res = await fetch('/api/create-checkout-session', {
-          method: 'POST', headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify({ tier, period, cellKey: currentKey, title: t })
-        });
-        const json = await res.json();
-        if(json?.url){ window.location.href = json.url; }
-        else{ alert('決済セッションの作成に失敗しました'); }
-      }catch(err){ console.error(err); alert('サーバーエラーが発生しました'); }
+   // --- Stripe の Price ID 一覧 ---
+  // ★ここはあなたの Stripe の price ID に書き換えてください
+  //   （とりあえず 1プランだけなら red_30d だけでもOK）
+  const PRICE_IDS = { "normal_1d":  "price_1SQreD3vSReOzkVxyOz0wodi"
+                      "normal_7d":  "price_xxxxxxxx"
+                      "normal_30d":  "price_xxxxxxxx"
+                      "red_1d":  "price_xxxxxxxx"
+                      "red_1d":  "price_xxxxxxxx"
+                      "red_1d":  "price_xxxxxxxx"
+                      "red_1d":  "price_xxxxxxxx"
+                      "red_1d":  "price_xxxxxxxx"
+                      "red_1d":  "price_xxxxxxxx"
+    // 例:
+    // "red_1d":  "price_xxxxxxxx",
+    // "red_30d": "price_yyyyyyyy",
+    // "rainbow_30d": "price_zzzzzzzz",
+  };
+
+  // ===== 決済 (Stripe Checkout) =====
+  document.getElementById('checkoutBtn').addEventListener('click', startCheckout);
+
+  async function startCheckout() {
+    if (!currentKey) {
+      alert('セルを選択してください');
+      return;
     }
+
+    const title  = (ownerInput.value || '').trim();
+    const tier   = editor.querySelector('input[name="tier"]:checked')?.value || 'red';
+    const period = editor.querySelector('input[name="period"]:checked')?.value || '30d';
+
+    // tier + period から priceId を決定
+    const planKey = `${tier}_${period}`;
+    const priceId = PRICE_IDS[planKey];
+
+    if (!priceId) {
+      alert(`価格IDが設定されていません: ${planKey}`);
+      console.error('PRICE_IDS が未設定です', { planKey, PRICE_IDS });
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          priceId,
+          metadata: {
+            cellKey: currentKey,
+            period,
+            tier,
+            title,
+          },
+        }),
+      });
+
+      // サーバー側エラー用のチェック
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('create-checkout-session failed', res.status, text);
+        alert('決済セッションの作成に失敗しました');
+        return;
+      }
+
+      const json = await res.json();
+      console.log('create-checkout-session response:', json);
+
+      if (json?.url) {
+        window.location.href = json.url; // Stripe の画面へ
+      } else {
+        console.error('unexpected response (no url)', json);
+        alert('決済セッションの作成に失敗しました');
+      }
+    } catch (err) {
+      console.error('fetch error:', err);
+      alert('サーバーエラーが発生しました');
+    }
+  }
 
     // ====== 起動 ======
     init();
@@ -369,6 +430,7 @@ setInterval(()=>{
   </script>
 </body>
 </html>
+
 
 
 
