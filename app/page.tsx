@@ -70,6 +70,12 @@ export default function Home() {
 
   }
 
+function getCell(x: number, y: number) {
+  return cells.find(
+    cell => cell.x === x && cell.y === y
+  );
+}
+
   function isFilled(x: number, y: number) {
     return cells.some(cell => cell.x === x && cell.y === y);
   }
@@ -84,16 +90,19 @@ export default function Home() {
       grid.push(
         <div
           key={`${x}-${y}`}
-          onClick={() => setSelectedCell({ x, y })}
-          className={`
-            w-16 h-16 border border-gray-700 cursor-pointer transition
-            ${filled ? "bg-green-500" : "bg-black hover:bg-gray-800"}
-          `}
-        />
-      );
+onClick={() => {
 
-    }
+  const existingCell = getCell(x, y);
+
+  setSelectedCell({ x, y });
+
+  if (existingCell) {
+    setTitle(existingCell.title || "");
+  } else {
+    setTitle("");
   }
+
+}}
 
   return (
     <main className="min-h-screen bg-black text-white">
