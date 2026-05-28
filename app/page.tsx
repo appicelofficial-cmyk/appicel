@@ -9,6 +9,13 @@ export default function Home() {
 
   const [cells, setCells] = useState<any[]>([]);
 
+  const [selectedCell, setSelectedCell] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const [title, setTitle] = useState("");
+
   useEffect(() => {
 
     fetchCells();
@@ -44,11 +51,22 @@ export default function Home() {
 
   }
 
-  async function handleCellClick(x: number, y: number) {
+  async function saveCell() {
+
+    if (!selectedCell) return;
 
     await supabase
       .from("cells")
-      .insert([{ x, y }]);
+      .insert([
+        {
+          x: selectedCell.x,
+          y: selectedCell.y,
+          title,
+        }
+      ]);
+
+    setSelectedCell(null);
+    setTitle("");
 
   }
 
@@ -66,7 +84,7 @@ export default function Home() {
       grid.push(
         <div
           key={`${x}-${y}`}
-          onClick={() => handleCellClick(x, y)}
+          onClick={() => setSelectedCell({ x, y })}
           className={`
             w-16 h-16 border border-gray-700 cursor-pointer transition
             ${filled ? "bg-green-500" : "bg-black hover:bg-gray-800"}
@@ -94,6 +112,35 @@ export default function Home() {
           {grid}
         </div>
       </div>
+
+      {selectedCell && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center">
+
+          <div className="bg-white text-black p-6 rounded w-80">
+
+            <h2 className="text-2xl mb-4">
+              {selectedCell.x}.{selectedCell.y}
+            </h2>
+
+            <input
+              type="text"
+              placeholder="タイトル"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full border p-2 mb-4"
+            />
+
+            <button
+              onClick={saveCell}
+              className="w-full bg-black text-white p-2 rounded"
+            >
+              保存
+            </button>
+
+          </div>
+
+        </div>
+      )}
 
     </main>
   );
