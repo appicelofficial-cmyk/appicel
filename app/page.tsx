@@ -55,29 +55,49 @@ export default function Home() {
 
     if (!selectedCell) return;
 
-    await supabase
-      .from("cells")
-      .insert([
-        {
-          x: selectedCell.x,
-          y: selectedCell.y,
+    const existingCell = getCell(
+      selectedCell.x,
+      selectedCell.y
+    );
+
+    if (existingCell) {
+
+      await supabase
+        .from("cells")
+        .update({
           title,
-        }
-      ]);
+        })
+        .eq("id", existingCell.id);
+
+    } else {
+
+      await supabase
+        .from("cells")
+        .insert([
+          {
+            x: selectedCell.x,
+            y: selectedCell.y,
+            title,
+          }
+        ]);
+
+    }
 
     setSelectedCell(null);
     setTitle("");
 
   }
 
-function getCell(x: number, y: number) {
-  return cells.find(
-    cell => cell.x === x && cell.y === y
-  );
-}
+  function getCell(x: number, y: number) {
+    return cells.find(
+      cell => cell.x === x && cell.y === y
+    );
+  }
 
   function isFilled(x: number, y: number) {
-    return cells.some(cell => cell.x === x && cell.y === y);
+    return cells.some(
+      cell => cell.x === x && cell.y === y
+    );
   }
 
   const grid = [];
@@ -90,19 +110,28 @@ function getCell(x: number, y: number) {
       grid.push(
         <div
           key={`${x}-${y}`}
-onClick={() => {
+          onClick={() => {
 
-  const existingCell = getCell(x, y);
+            const existingCell = getCell(x, y);
 
-  setSelectedCell({ x, y });
+            setSelectedCell({ x, y });
 
-  if (existingCell) {
-    setTitle(existingCell.title || "");
-  } else {
-    setTitle("");
+            if (existingCell) {
+              setTitle(existingCell.title || "");
+            } else {
+              setTitle("");
+            }
+
+          }}
+          className={`
+            w-16 h-16 border border-gray-700 cursor-pointer transition
+            ${filled ? "bg-green-500" : "bg-black hover:bg-gray-800"}
+          `}
+        />
+      );
+
+    }
   }
-
-}}
 
   return (
     <main className="min-h-screen bg-black text-white">
