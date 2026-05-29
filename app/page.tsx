@@ -15,6 +15,7 @@ export default function Home() {
   } | null>(null);
 
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
 
   useEffect(() => {
 
@@ -66,6 +67,7 @@ export default function Home() {
         .from("cells")
         .update({
           title,
+          description,
         })
         .eq("id", existingCell.id);
 
@@ -78,6 +80,7 @@ export default function Home() {
             x: selectedCell.x,
             y: selectedCell.y,
             title,
+            description,
           }
         ]);
 
@@ -85,6 +88,7 @@ export default function Home() {
 
     setSelectedCell(null);
     setTitle("");
+    setDescription("");
 
   }
 
@@ -118,8 +122,10 @@ export default function Home() {
 
             if (existingCell) {
               setTitle(existingCell.title || "");
+              setDescription(existingCell.description || "");
             } else {
               setTitle("");
+              setDescription("");
             }
 
           }}
@@ -166,6 +172,13 @@ export default function Home() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full border p-2 mb-4"
+            />
+
+            <textarea
+              placeholder="本文"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full border p-2 mb-4 h-32"
             />
 
             <button
