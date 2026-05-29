@@ -8,14 +8,7 @@ const GRID_SIZE = 32;
 export default function Home() {
 
   const [cells, setCells] = useState<any[]>([]);
-
-  const [selectedCell, setSelectedCell] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [selectedCell, setSelectedCell] = useState<any | null>(null);
 
   useEffect(() => {
 
@@ -52,56 +45,42 @@ export default function Home() {
 
   }
 
-  async function saveCell() {
+  async function handleCellClick(x: number, y: number) {
 
-    if (!selectedCell) return;
-
-    const existingCell = getCell(
-      selectedCell.x,
-      selectedCell.y
+    const existing = cells.find(
+      cell => cell.x === x && cell.y === y
     );
 
-    if (existingCell) {
+    // 既存セル
+    if (existing) {
 
-      await supabase
-        .from("cells")
-        .update({
-          title,
-          description,
-        })
-        .eq("id", existingCell.id);
-
-    } else {
-
-      await supabase
-        .from("cells")
-        .insert([
-          {
-            x: selectedCell.x,
-            y: selectedCell.y,
-            title,
-            description,
-          }
-        ]);
+      setSelectedCell(existing);
+      return;
 
     }
 
-    setSelectedCell(null);
-    setTitle("");
-    setDescription("");
+    // 新規作成
+    const title = prompt("タイトルを入力");
+    if (!title) return;
 
-  }
+    const description = prompt("本文を入力");
+    if (!description) return;
 
-  function getCell(x: number, y: number) {
-    return cells.find(
-      cell => cell.x === x && cell.y === y
-    );
+    await supabase
+      .from("cells")
+      .insert([
+        {
+          x,
+          y,
+          title,
+          description,
+        }
+      ]);
+
   }
 
   function isFilled(x: number, y: number) {
-    return cells.some(
-      cell => cell.x === x && cell.y === y
-    );
+    return cells.some(cell => cell.x === x && cell.y === y);
   }
 
   const grid = [];
@@ -114,21 +93,7 @@ export default function Home() {
       grid.push(
         <div
           key={`${x}-${y}`}
-          onClick={() => {
-
-            const existingCell = getCell(x, y);
-
-            setSelectedCell({ x, y });
-
-            if (existingCell) {
-              setTitle(existingCell.title || "");
-              setDescription(existingCell.description || "");
-            } else {
-              setTitle("");
-              setDescription("");
-            }
-
-          }}
+          onClick={() => handleCellClick(x, y)}
           className={`
             w-16 h-16 border border-gray-700 cursor-pointer transition
             ${filled ? "bg-green-500" : "bg-black hover:bg-gray-800"}
@@ -158,34 +123,23 @@ export default function Home() {
       </div>
 
       {selectedCell && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
 
-          <div className="bg-white text-black p-6 rounded w-80">
+          <div className="bg-zinc-900 p-6 rounded-xl w-[400px] border border-gray-700">
 
-            <h2 className="text-2xl mb-4">
-              {selectedCell.x}.{selectedCell.y}
+            <h2 className="text-2xl font-bold mb-4">
+              {selectedCell.title}
             </h2>
 
-            <input
-              type="text"
-              placeholder="タイトル"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full border p-2 mb-4"
-            />
-
-            <textarea
-              placeholder="本文"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full border p-2 mb-4 h-32"
-            />
+            <p className="text-gray-300 whitespace-pre-wrap mb-6">
+              {selectedCell.description}
+            </p>
 
             <button
-              onClick={saveCell}
-              className="w-full bg-black text-white p-2 rounded"
+              onClick={() => setSelectedCell(null)}
+              className="bg-white text-black px-4 py-2 rounded"
             >
-              保存
+              閉じる
             </button>
 
           </div>
