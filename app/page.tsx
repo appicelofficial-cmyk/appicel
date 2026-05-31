@@ -10,6 +10,15 @@ export default function Home() {
   const [cells, setCells] = useState<any[]>([]);
   const [selectedCell, setSelectedCell] = useState<any | null>(null);
 
+  const [createCell, setCreateCell] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+
   useEffect(() => {
 
     fetchCells();
@@ -51,7 +60,6 @@ export default function Home() {
       cell => cell.x === x && cell.y === y
     );
 
-    // 既存セル
     if (existing) {
 
       setSelectedCell(existing);
@@ -59,26 +67,30 @@ export default function Home() {
 
     }
 
-    // 新規作成
-    const title = prompt("タイトルを入力");
-    if (!title) return;
+    setCreateCell({ x, y });
 
-   const description = prompt("本文を入力");
-if (!description) return;
+  }
 
-const imageUrl = prompt("画像URLを入力（後で画像アップロードに変更予定）");
+  async function saveCell() {
 
-await supabase
-  .from("cells")
-  .insert([
-    {
-      x,
-      y,
-      title,
-      description,
-      image_url: imageUrl || null,
-    }
-  ]);
+    if (!createCell) return;
+
+    await supabase
+      .from("cells")
+      .insert([
+        {
+          x: createCell.x,
+          y: createCell.y,
+          title,
+          description,
+          image_url: imageUrl || null,
+        }
+      ]);
+
+    setCreateCell(null);
+    setTitle("");
+    setDescription("");
+    setImageUrl("");
 
   }
 
@@ -138,19 +150,61 @@ await supabase
               {selectedCell.description}
             </p>
 
-             {selectedCell.image_url && (
+            {selectedCell.image_url && (
               <img
-              src={selectedCell.image_url}
-              alt={selectedCell.title}
-              className="w-full rounded-lg mb-6"
-             />
-             )}
+                src={selectedCell.image_url}
+                alt={selectedCell.title}
+                className="w-full rounded-lg mb-6"
+              />
+            )}
 
             <button
               onClick={() => setSelectedCell(null)}
               className="bg-white text-black px-4 py-2 rounded"
             >
               閉じる
+            </button>
+
+          </div>
+
+        </div>
+      )}
+
+      {createCell && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+
+          <div className="bg-zinc-900 p-6 rounded-xl w-[400px] border border-gray-700">
+
+            <h2 className="text-xl mb-4">
+              新規投稿
+            </h2>
+
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="タイトル"
+              className="w-full p-2 mb-3 text-black"
+            />
+
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="本文"
+              className="w-full p-2 mb-3 text-black"
+            />
+
+            <input
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="画像URL"
+              className="w-full p-2 mb-3 text-black"
+            />
+
+            <button
+              onClick={saveCell}
+              className="bg-white text-black px-4 py-2 rounded"
+            >
+              保存
             </button>
 
           </div>
