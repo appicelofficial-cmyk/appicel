@@ -63,19 +63,22 @@ export default function Home() {
     const title = prompt("タイトルを入力");
     if (!title) return;
 
-    const description = prompt("本文を入力");
-    if (!description) return;
+   const description = prompt("本文を入力");
+if (!description) return;
 
-    await supabase
-      .from("cells")
-      .insert([
-        {
-          x,
-          y,
-          title,
-          description,
-        }
-      ]);
+const imageUrl = prompt("画像URLを入力（後で画像アップロードに変更予定）");
+
+await supabase
+  .from("cells")
+  .insert([
+    {
+      x,
+      y,
+      title,
+      description,
+      image_url: imageUrl || null,
+    }
+  ]);
 
   }
 
@@ -134,6 +137,14 @@ export default function Home() {
             <p className="text-gray-300 whitespace-pre-wrap mb-6">
               {selectedCell.description}
             </p>
+
+             {selectedCell.image_url && (
+              <img
+              src={selectedCell.image_url}
+              alt={selectedCell.title}
+              className="w-full rounded-lg mb-6"
+             />
+             )}
 
             <button
               onClick={() => setSelectedCell(null)}
