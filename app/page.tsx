@@ -183,21 +183,21 @@ export default function Home() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="タイトル"
-              className="w-full p-2 mb-3 text-black"
+              className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
 
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="本文"
-              className="w-full p-2 mb-3 text-black"
+              className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
 
             <input
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
               placeholder="画像URL"
-              className="w-full p-2 mb-3 text-black"
+              className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
 
             <button
