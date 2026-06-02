@@ -86,8 +86,9 @@ export default function Home() {
       .from("cell-images")
       .upload(fileName, imageFile);
 
-    if (error) {
-  alert("画像アップロード失敗");
+   if (error) {
+  console.error(error);
+  alert(error.message);
   return;
 }
 
