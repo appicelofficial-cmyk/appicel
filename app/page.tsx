@@ -87,9 +87,9 @@ export default function Home() {
       .upload(fileName, imageFile);
 
     if (error) {
-      alert("画像アップロード失敗");
-      return;
-    }
+  alert("画像アップロード失敗");
+  return;
+}
 
     const { data } = supabase.storage
       .from("cell-images")
@@ -211,7 +211,7 @@ export default function Home() {
             setCreateCell(null);
             setTitle("");
             setDescription("");
-            
+            setImageFile(null);
           }}
          className="absolute top-3 right-4 text-2xl text-gray-400 hover:text-white"
        >
