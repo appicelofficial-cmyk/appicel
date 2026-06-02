@@ -140,8 +140,15 @@ export default function Home() {
       {selectedCell && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
 
-          <div className="bg-zinc-900 p-6 rounded-xl w-[400px] border border-gray-700">
+         <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] border border-gray-700">
 
+            <button
+             onClick={() => setSelectedCell(null)}
+             className="absolute top-3 right-4 text-2xl text-gray-400 hover:text-white"
+            >
+             ×
+            </button>
+            
             <h2 className="text-2xl font-bold mb-4">
               {selectedCell.title}
             </h2>
@@ -173,8 +180,20 @@ export default function Home() {
       {createCell && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
 
-          <div className="bg-zinc-900 p-6 rounded-xl w-[400px] border border-gray-700">
+          <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] border border-gray-700">
 
+           <button
+            onClick={() => {
+            setCreateCell(null);
+            setTitle("");
+            setDescription("");
+            setImageUrl("");
+          }}
+         className="absolute top-3 right-4 text-2xl text-gray-400 hover:text-white"
+       >
+         ×
+       </button>
+           
             <h2 className="text-xl mb-4">
               新規投稿
             </h2>
