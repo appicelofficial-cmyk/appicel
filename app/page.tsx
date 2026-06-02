@@ -17,7 +17,7 @@ export default function Home() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   useEffect(() => {
 
@@ -73,26 +73,50 @@ export default function Home() {
 
   async function saveCell() {
 
-    if (!createCell) return;
+  if (!createCell) return;
 
-    await supabase
-      .from("cells")
-      .insert([
-        {
-          x: createCell.x,
-          y: createCell.y,
-          title,
-          description,
-          image_url: imageUrl || null,
-        }
-      ]);
+  let imageUrl = null;
 
-    setCreateCell(null);
-    setTitle("");
-    setDescription("");
-    setImageUrl("");
+  if (imageFile) {
+
+    const fileName =
+      `${Date.now()}-${imageFile.name}`;
+
+    const { error } = await supabase.storage
+      .from("cell-images")
+      .upload(fileName, imageFile);
+
+    if (error) {
+      alert("画像アップロード失敗");
+      return;
+    }
+
+    const { data } = supabase.storage
+      .from("cell-images")
+      .getPublicUrl(fileName);
+
+    imageUrl = data.publicUrl;
 
   }
+
+  await supabase
+    .from("cells")
+    .insert([
+      {
+        x: createCell.x,
+        y: createCell.y,
+        title,
+        description,
+        image_url: imageUrl,
+      }
+    ]);
+
+  setCreateCell(null);
+  setTitle("");
+  setDescription("");
+  setImageFile(null);
+
+}
 
   function isFilled(x: number, y: number) {
     return cells.some(cell => cell.x === x && cell.y === y);
@@ -187,7 +211,7 @@ export default function Home() {
             setCreateCell(null);
             setTitle("");
             setDescription("");
-            setImageUrl("");
+            
           }}
          className="absolute top-3 right-4 text-2xl text-gray-400 hover:text-white"
        >
@@ -213,11 +237,19 @@ export default function Home() {
             />
 
             <input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="画像URL"
-              className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
-            />
+             type="file"
+             accept="image/*"
+             onChange={(e) => {
+
+               if (!e.target.files?.[0]) return;
+
+               setImageFile(
+                 e.target.files[0]
+               );
+
+             }}
+             className="w-full mb-4"
+           />
 
             <button
               onClick={saveCell}
