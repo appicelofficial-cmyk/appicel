@@ -134,11 +134,49 @@ export default function Home() {
         <div
           key={`${x}-${y}`}
           onClick={() => handleCellClick(x, y)}
-          className={`
-            w-16 h-16 border border-gray-700 cursor-pointer transition
-            ${filled ? "bg-green-500" : "bg-black hover:bg-gray-800"}
-          `}
+          className="
+            w-16 h-16 border border-gray-700
+            cursor-pointer transition
+            overflow-hidden bg-black
+            hover:scale-105
+          "
+         >
+
+          {(() => {
+
+            const cellData = cells.find(
+            cell => cell.x === x && cell.y === y
+          );
+
+            if (!cellData) return null;
+
+    // 画像あり
+           if (cellData.image_url) {
+
+           return (
+           <img
+            src={cellData.image_url}
+           alt={cellData.title}
+           className="
+            w-full h-full
+            object-cover
+          "
         />
+      );
+
+    }
+
+    // 画像なし
+    return (
+      <div className="
+        w-full h-full
+        bg-green-500
+      " />
+    );
+
+  })()}
+
+</div>
       );
 
     }
