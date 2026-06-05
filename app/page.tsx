@@ -19,7 +19,8 @@ export default function Home() {
 
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
-
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  
   const dragRef = useRef({
     isDragging: false,
     startX: 0,
@@ -50,6 +51,33 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+  function fitBoard() {
+    if (!containerRef.current) return;
+
+    const containerWidth = containerRef.current.clientWidth;
+    const containerHeight = containerRef.current.clientHeight;
+
+    const boardSize =
+      GRID_SIZE * CELL_SIZE + (GRID_SIZE - 1) * GAP_SIZE;
+
+    const fitScale = Math.min(
+      containerWidth / boardSize,
+      containerHeight / boardSize
+    ) * 0.95;
+
+    setScale(fitScale);
+    setPosition({ x: 0, y: 0 });
+  }
+
+  fitBoard();
+  window.addEventListener("resize", fitBoard);
+
+  return () => {
+    window.removeEventListener("resize", fitBoard);
+  };
+}, []);
+  
   async function fetchCells() {
     const { data } = await supabase.from("cells").select("*");
     setCells(data || []);
@@ -117,7 +145,7 @@ export default function Home() {
     e.preventDefault();
 
     const nextScale = Math.min(
-      Math.max(scale - e.deltaY * 0.001, 0.5),
+      Math.max(scale - e.deltaY * 0.001, 0.2),
       4
     );
 
@@ -218,6 +246,7 @@ export default function Home() {
       </h1>
 
       <div
+        ref={containerRef}
         className="w-screen h-[calc(100vh-100px)] flex items-center justify-center overflow-hidden touch-none"
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
