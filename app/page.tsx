@@ -241,13 +241,13 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-black text-white overflow-hidden">
 
-      <h1 className="text-4xl font-bold text-center pt-6 pb-4">
+      <h1 className="text-4xl font-bold text-center pt-4 pb-1">
         Appicel
       </h1>
 
       <div
         ref={containerRef}
-        className="w-screen h-[calc(100vh-100px)] flex items-center justify-center overflow-hidden touch-none"
+        className="w-screen h-[calc(100vh-100px)] flex justify-center items-start overflow-hidden touch-none pt-2"
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
