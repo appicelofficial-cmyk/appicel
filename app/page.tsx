@@ -49,19 +49,7 @@ export default function Home() {
 
   const boardSize = GRID_SIZE * CELL_SIZE + (GRID_SIZE - 1) * GAP_SIZE;
 
-  useEffect(() => {
-    fetchCells();
-
-    const channel = supabase
-      .channel("cells")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "cells" },
-        () => fetchCells()
-      )
-      .subscribe();
-
-    function LinkIcon(type: string) {
+  function LinkIcon(type: string) {
 
   switch (type) {
 
@@ -89,6 +77,18 @@ export default function Home() {
   }
 
 }
+  
+  useEffect(() => {
+    fetchCells();
+
+    const channel = supabase
+      .channel("cells")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cells" },
+        () => fetchCells()
+      )
+      .subscribe();
     
       return () => {
       supabase.removeChannel(channel);
