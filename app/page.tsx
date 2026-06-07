@@ -67,7 +67,7 @@ export default function Home() {
     ) * 0.95;
 
     setScale(fitScale);
-    setPosition({ x: 0, y: 0 });
+    setPosition({ x: 0, y: -180 });
   }
 
   fitBoard();
@@ -145,7 +145,7 @@ export default function Home() {
     e.preventDefault();
 
     const nextScale = Math.min(
-      Math.max(scale - e.deltaY * 0.001, 0.2),
+      Math.max(scale - e.deltaY * 0.001, 0.5),
       4
     );
 
@@ -172,10 +172,22 @@ export default function Home() {
       dragRef.current.isDragging = true;
     }
 
-    setPosition({
-      x: dragRef.current.lastX + dx,
-      y: dragRef.current.lastY + dy,
-    });
+    const newX =
+  Math.max(
+    Math.min(dragRef.current.lastX + dx, 300),
+    -300
+  );
+
+const newY =
+  Math.max(
+    Math.min(dragRef.current.lastY + dy, 300),
+    -300
+  );
+
+setPosition({
+  x: newX,
+  y: newY,
+});
   }
 
   function getTouchDistance(touches: React.TouchList) {
@@ -246,14 +258,17 @@ export default function Home() {
       </h1>
 
       <div
-        ref={containerRef}
-        className="w-screen h-[calc(100vh-100px)] flex justify-center items-start overflow-hidden touch-none pt-2"
+        
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
+      > <div
+          ref={containerRef}
+          className="w-screen h-[calc(100vh-100px)] flex justify-center items-start overflow-hidden touch-none"
       >
+      </div>
         <div
           className="grid"
           style={{
