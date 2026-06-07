@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  FaXTwitter,
+  FaInstagram,
+  FaFacebook,
+  FaTiktok,
+  FaYoutube,
+  FaLink
+} from "react-icons/fa6";
+
+import { SiLine } from "react-icons/si";
 import { supabase } from "../lib/supabase";
 
 const GRID_SIZE = 32;
@@ -51,7 +61,36 @@ export default function Home() {
       )
       .subscribe();
 
-    return () => {
+    function LinkIcon(type: string) {
+
+  switch (type) {
+
+    case "x":
+      return <FaXTwitter size={28} />;
+
+    case "instagram":
+      return <FaInstagram size={28} />;
+
+    case "facebook":
+      return <FaFacebook size={28} />;
+
+    case "tiktok":
+      return <FaTiktok size={28} />;
+
+    case "line":
+      return <SiLine size={28} />;
+
+    case "youtube":
+      return <FaYoutube size={28} />;
+
+    default:
+      return <FaLink size={28} />;
+
+  }
+
+}
+    
+      return () => {
       supabase.removeChannel(channel);
     };
   }, []);
@@ -320,15 +359,27 @@ export default function Home() {
             )}
 
             {selectedCell.link_url && (
-              <a
-                href={selectedCell.link_url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-block mb-4 px-3 py-2 bg-white text-black rounded"
-              >
-                {selectedCell.link_type?.toUpperCase() || "LINK"}
-              </a>
-            )}
+
+  <a
+    href={selectedCell.link_url}
+    target="_blank"
+    rel="noreferrer"
+    className="
+      inline-flex
+      items-center
+      justify-center
+      w-12
+      h-12
+      rounded-full
+      bg-zinc-800
+      hover:bg-zinc-700
+      mb-4
+    "
+  >
+    {LinkIcon(selectedCell.link_type)}
+  </a>
+
+)}
             
             <p className="text-gray-300 whitespace-pre-wrap mb-6">
               {selectedCell.description}
