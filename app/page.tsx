@@ -13,6 +13,7 @@ export default function Home() {
   const [createCell, setCreateCell] = useState<{ x: number; y: number } | null>(null);
 
   const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
   const [description, setDescription] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
 
@@ -145,6 +146,7 @@ export default function Home() {
         x: createCell.x,
         y: createCell.y,
         title,
+        author,
         description,
         image_url: imageUrl,
       },
@@ -152,6 +154,7 @@ export default function Home() {
 
     setCreateCell(null);
     setTitle("");
+    setAuthor("");
     setDescription("");
     setImageFile(null);
   }
@@ -294,7 +297,13 @@ export default function Home() {
               ×
             </button>
 
-            <h2 className="text-2xl font-bold mb-4">{selectedCell.title}</h2>
+            <h2 className="text-2xl font-bold mb-2">{selectedCell.title}</h2>
+
+            {selectedCell.author && (
+              <p className="text-sm text-gray-400 mb-4">
+                投稿者：{selectedCell.author}
+              </p>
+            )}
 
             {selectedCell.image_url && (
               <img
@@ -318,6 +327,7 @@ export default function Home() {
               onClick={() => {
                 setCreateCell(null);
                 setTitle("");
+                setAuthor("");
                 setDescription("");
                 setImageFile(null);
               }}
@@ -332,6 +342,13 @@ export default function Home() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="タイトル"
+              className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
+            />
+
+            <input
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+              placeholder="投稿者名"
               className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
 
