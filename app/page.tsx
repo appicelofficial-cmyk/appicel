@@ -14,6 +14,8 @@ export default function Home() {
 
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
+  const [linkType, setLinkType] = useState("other");
+  const [linkUrl, setLinkUrl] = useState("");
   const [description, setDescription] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
 
@@ -148,6 +150,8 @@ export default function Home() {
         title,
         author,
         description,
+        link_type: linkType,
+        link_url: linkUrl,
         image_url: imageUrl,
       },
     ]);
@@ -155,6 +159,8 @@ export default function Home() {
     setCreateCell(null);
     setTitle("");
     setAuthor("");
+    setLinkType("other");
+    setLinkUrl("");
     setDescription("");
     setImageFile(null);
   }
@@ -313,6 +319,17 @@ export default function Home() {
               />
             )}
 
+            {selectedCell.link_url && (
+              <a
+                href={selectedCell.link_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block mb-4 px-3 py-2 bg-white text-black rounded"
+              >
+                {selectedCell.link_type?.toUpperCase() || "LINK"}
+              </a>
+            )}
+            
             <p className="text-gray-300 whitespace-pre-wrap mb-6">
               {selectedCell.description}
             </p>
@@ -352,6 +369,27 @@ export default function Home() {
               className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
 
+            <select
+              value={linkType}
+              onChange={(e) => setLinkType(e.target.value)}
+              className="w-full p-2 mb-3 bg-zinc-800 text-white rounded"
+             >
+              <option value="x">X</option>
+              <option value="instagram">Instagram</option>
+              <option value="facebook">Facebook</option>
+              <option value="tiktok">TikTok</option>
+              <option value="line">LINE</option>
+              <option value="youtube">YouTube</option>
+              <option value="other">Other</option>
+            </select>
+
+            <input
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="リンクURL"
+              className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
+            />
+            
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
