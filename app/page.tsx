@@ -10,7 +10,6 @@ const GAP_SIZE = 2;
 export default function Home() {
   const [cells, setCells] = useState<any[]>([]);
   const [selectedCell, setSelectedCell] = useState<any | null>(null);
-
   const [createCell, setCreateCell] = useState<{ x: number; y: number } | null>(null);
 
   const [title, setTitle] = useState("");
@@ -19,8 +18,9 @@ export default function Home() {
 
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+
   const containerRef = useRef<HTMLDivElement | null>(null);
-  
+
   const dragRef = useRef({
     isDragging: false,
     startX: 0,
@@ -33,6 +33,8 @@ export default function Home() {
     distance: 0,
     scale: 1,
   });
+
+  const boardSize = GRID_SIZE * CELL_SIZE + (GRID_SIZE - 1) * GAP_SIZE;
 
   useEffect(() => {
     fetchCells();
@@ -52,32 +54,45 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    fitBoard();
+    window.addEventListener("resize", fitBoard);
+
+    return () => {
+      window.removeEventListener("resize", fitBoard);
+    };
+  }, []);
+
   function fitBoard() {
     if (!containerRef.current) return;
 
-    const containerWidth = containerRef.current.clientWidth;
-    const containerHeight = containerRef.current.clientHeight;
+    const cw = containerRef.current.clientWidth;
+    const ch = containerRef.current.clientHeight;
 
-    const boardSize =
-      GRID_SIZE * CELL_SIZE + (GRID_SIZE - 1) * GAP_SIZE;
+    const nextScale = Math.min(cw / boardSize, ch / boardSize) * 0.96;
 
-    const fitScale = Math.min(
-      containerWidth / boardSize,
-      containerHeight / boardSize
-    ) * 0.95;
-
-    setScale(fitScale);
-    setPosition({ x: 0, y: -180 });
+    setScale(nextScale);
+    setPosition({ x: 0, y: 0 });
   }
 
-  fitBoard();
-  window.addEventListener("resize", fitBoard);
+  function clampPosition(nextX: number, nextY: number, nextScale = scale) {
+    if (!containerRef.current) {
+      return { x: nextX, y: nextY };
+    }
 
-  return () => {
-    window.removeEventListener("resize", fitBoard);
-  };
-}, []);
-  
+    const cw = containerRef.current.clientWidth;
+    const ch = containerRef.current.clientHeight;
+
+    const visualSize = boardSize * nextScale;
+
+    const maxX = Math.max((visualSize - cw) / 2, 0);
+    const maxY = Math.max((visualSize - ch) / 2, 0);
+
+    return {
+      x: Math.min(Math.max(nextX, -maxX), maxX),
+      y: Math.min(Math.max(nextY, -maxY), maxY),
+    };
+  }
+
   async function fetchCells() {
     const { data } = await supabase.from("cells").select("*");
     setCells(data || []);
@@ -144,12 +159,11 @@ export default function Home() {
   function handleWheel(e: React.WheelEvent) {
     e.preventDefault();
 
-    const nextScale = Math.min(
-      Math.max(scale - e.deltaY * 0.001, 0.5),
-      4
-    );
+    const nextScale = Math.min(Math.max(scale - e.deltaY * 0.001, 0.25), 4);
+    const fixed = clampPosition(position.x, position.y, nextScale);
 
     setScale(nextScale);
+    setPosition(fixed);
   }
 
   function handlePointerDown(e: React.PointerEvent) {
@@ -172,22 +186,12 @@ export default function Home() {
       dragRef.current.isDragging = true;
     }
 
-    const newX =
-  Math.max(
-    Math.min(dragRef.current.lastX + dx, 300),
-    -300
-  );
+    const fixed = clampPosition(
+      dragRef.current.lastX + dx,
+      dragRef.current.lastY + dy
+    );
 
-const newY =
-  Math.max(
-    Math.min(dragRef.current.lastY + dy, 300),
-    -300
-  );
-
-setPosition({
-  x: newX,
-  y: newY,
-});
+    setPosition(fixed);
   }
 
   function getTouchDistance(touches: React.TouchList) {
@@ -209,11 +213,14 @@ setPosition({
 
       const distance = getTouchDistance(e.touches);
       const nextScale = Math.min(
-        Math.max((distance / pinchRef.current.distance) * pinchRef.current.scale, 0.5),
+        Math.max((distance / pinchRef.current.distance) * pinchRef.current.scale, 0.25),
         4
       );
 
+      const fixed = clampPosition(position.x, position.y, nextScale);
+
       setScale(nextScale);
+      setPosition(fixed);
     }
   }
 
@@ -227,10 +234,7 @@ setPosition({
         <div
           key={`${x}-${y}`}
           onClick={() => handleCellClick(x, y)}
-          className="
-            border border-gray-700 cursor-pointer transition
-            overflow-hidden bg-black hover:scale-105
-          "
+          className="border border-gray-700 cursor-pointer overflow-hidden bg-black hover:opacity-80"
           style={{
             width: CELL_SIZE,
             height: CELL_SIZE,
@@ -251,27 +255,25 @@ setPosition({
   }
 
   return (
-    <main className="min-h-screen bg-black text-white overflow-hidden">
-
-      <h1 className="text-4xl font-bold text-center pt-4 pb-1">
+    <main className="h-screen bg-black text-white overflow-hidden">
+      <h1 className="text-4xl font-bold text-center h-[70px] flex items-center justify-center">
         Appicel
       </h1>
 
       <div
-        
+        ref={containerRef}
+        className="w-screen h-[calc(100vh-70px)] flex items-center justify-center overflow-hidden touch-none"
         onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
-      > <div
-          ref={containerRef}
-          className="w-screen h-[calc(100vh-100px)] flex justify-center items-start overflow-hidden touch-none"
       >
-      </div>
         <div
           className="grid"
           style={{
+            width: boardSize,
+            height: boardSize,
             gap: GAP_SIZE,
             gridTemplateColumns: `repeat(${GRID_SIZE}, ${CELL_SIZE}px)`,
             transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
@@ -284,8 +286,7 @@ setPosition({
 
       {selectedCell && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] border border-gray-700">
-
+          <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] max-w-[90vw] border border-gray-700">
             <button
               onClick={() => setSelectedCell(null)}
               className="absolute top-3 right-4 text-2xl text-gray-400 hover:text-white"
@@ -293,9 +294,7 @@ setPosition({
               ×
             </button>
 
-            <h2 className="text-2xl font-bold mb-4">
-              {selectedCell.title}
-            </h2>
+            <h2 className="text-2xl font-bold mb-4">{selectedCell.title}</h2>
 
             {selectedCell.image_url && (
               <img
@@ -308,15 +307,13 @@ setPosition({
             <p className="text-gray-300 whitespace-pre-wrap mb-6">
               {selectedCell.description}
             </p>
-
           </div>
         </div>
       )}
 
       {createCell && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] border border-gray-700">
-
+          <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] max-w-[90vw] border border-gray-700">
             <button
               onClick={() => {
                 setCreateCell(null);
@@ -361,11 +358,9 @@ setPosition({
             >
               保存
             </button>
-
           </div>
         </div>
       )}
-
     </main>
   );
 }
