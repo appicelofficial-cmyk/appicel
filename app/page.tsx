@@ -11,6 +11,7 @@ import {
 } from "react-icons/fa6";
 
 import { SiLine } from "react-icons/si";
+import Cropper from "react-easy-crop";
 import { supabase } from "../lib/supabase";
 
 const GRID_SIZE = 32;
@@ -28,7 +29,14 @@ export default function Home() {
   const [linkUrl, setLinkUrl] = useState("");
   const [description, setDescription] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
 
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+
+  const [zoom, setZoom] = useState(1);
+
+  const [croppedAreaPixels, setCroppedAreaPixels] =
+    useState<any>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
@@ -452,11 +460,37 @@ export default function Home() {
               type="file"
               accept="image/*"
               onChange={(e) => {
-                if (!e.target.files?.[0]) return;
-                setImageFile(e.target.files[0]);
+
+                const file = e.target.files?.[0];
+
+                if (!file) return;
+
+                setImageFile(file);
+
+                setImagePreview(
+                  URL.createObjectURL(file)
+                );
+
               }}
-              className="w-full mb-4"
             />
+            
+                {imagePreview && (
+                  <div className="h-[300px] relative">
+
+                    <Cropper
+                      image={imagePreview}
+                      crop={crop}
+                      zoom={zoom}
+                      aspect={1}
+                      onCropChange={setCrop}
+                      onZoomChange={setZoom}
+                      onCropComplete={(_, pixels) =>
+                        setCroppedAreaPixels(pixels)
+                      }
+                    />
+
+                 </div>
+               )}
 
             <button
               onClick={saveCell}
