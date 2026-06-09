@@ -169,30 +169,50 @@ export default function Home() {
     if (!createCell) return;
 
     let imageUrl = null;
+    let originalImageUrlState = null;
 
-    if (imagePreview && croppedAreaPixels) {
+    if (imageFile && imagePreview && croppedAreaPixels) {
+  const originalFileName = `${Date.now()}-original-${imageFile.name}`;
+
+  const { error: originalError } = await supabase.storage
+    .from("cell-images")
+    .upload(originalFileName, imageFile);
+
+  if (originalError) {
+    console.error(originalError);
+    alert(originalError.message);
+    return;
+  }
+
+  const { data: originalData } = supabase.storage
+    .from("cell-images")
+    .getPublicUrl(originalFileName);
+
+  const originalImageUrl = originalData.publicUrl;
+
   const croppedBlob = await getCroppedImage(
     imagePreview,
     croppedAreaPixels
   );
 
-  const fileName = `${Date.now()}-cropped.jpg`;
+  const croppedFileName = `${Date.now()}-cropped.jpg`;
 
-  const { error } = await supabase.storage
+  const { error: croppedError } = await supabase.storage
     .from("cell-images")
-    .upload(fileName, croppedBlob);
+    .upload(croppedFileName, croppedBlob);
 
-  if (error) {
-    console.error(error);
-    alert(error.message);
+  if (croppedError) {
+    console.error(croppedError);
+    alert(croppedError.message);
     return;
   }
 
-  const { data } = supabase.storage
+  const { data: croppedData } = supabase.storage
     .from("cell-images")
-    .getPublicUrl(fileName);
+    .getPublicUrl(croppedFileName);
 
-  imageUrl = data.publicUrl;
+  imageUrl = croppedData.publicUrl;
+  originalImageUrlState = originalImageUrl;
 }
 
     await supabase.from("cells").insert([
@@ -205,6 +225,7 @@ export default function Home() {
         link_type: linkType,
         link_url: linkUrl,
         image_url: imageUrl,
+        original_image_url: originalImageUrlState,
       },
     ]);
 
@@ -369,7 +390,7 @@ export default function Home() {
 
             {selectedCell.image_url && (
               <img
-                src={selectedCell.image_url}
+                src={selectedCell.original_image_url || selectedCell.image_url}
                 alt={selectedCell.title}
                 className="w-full rounded-lg mb-6"
               />
