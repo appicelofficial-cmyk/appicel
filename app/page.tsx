@@ -170,25 +170,30 @@ export default function Home() {
 
     let imageUrl = null;
 
-    if (imageFile) {
-      const fileName = `${Date.now()}-${imageFile.name}`;
+    if (imagePreview && croppedAreaPixels) {
+  const croppedBlob = await getCroppedImage(
+    imagePreview,
+    croppedAreaPixels
+  );
 
-      const { error } = await supabase.storage
-        .from("cell-images")
-        .upload(fileName, imageFile);
+  const fileName = `${Date.now()}-cropped.jpg`;
 
-      if (error) {
-        console.error(error);
-        alert(error.message);
-        return;
-      }
+  const { error } = await supabase.storage
+    .from("cell-images")
+    .upload(fileName, croppedBlob);
 
-      const { data } = supabase.storage
-        .from("cell-images")
-        .getPublicUrl(fileName);
+  if (error) {
+    console.error(error);
+    alert(error.message);
+    return;
+  }
 
-      imageUrl = data.publicUrl;
-    }
+  const { data } = supabase.storage
+    .from("cell-images")
+    .getPublicUrl(fileName);
+
+  imageUrl = data.publicUrl;
+}
 
     await supabase.from("cells").insert([
       {
@@ -210,6 +215,10 @@ export default function Home() {
     setLinkUrl("");
     setDescription("");
     setImageFile(null);
+    setImagePreview("");
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
   }
 
   function handleWheel(e: React.WheelEvent) {
@@ -503,4 +512,43 @@ export default function Home() {
       )}
     </main>
   );
+}
+
+async function getCroppedImage(
+  imageSrc: string,
+  crop: any
+): Promise<Blob> {
+  const image = new Image();
+  image.src = imageSrc;
+
+  await new Promise((resolve) => {
+    image.onload = resolve;
+  });
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) throw new Error("Canvas error");
+
+  canvas.width = crop.width;
+  canvas.height = crop.height;
+
+  ctx.drawImage(
+    image,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
+    0,
+    0,
+    crop.width,
+    crop.height
+  );
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      if (!blob) throw new Error("Blob error");
+      resolve(blob);
+    }, "image/jpeg");
+  });
 }
