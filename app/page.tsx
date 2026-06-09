@@ -213,10 +213,44 @@ export default function Home() {
     setComments(data || []);
   }
 
-  async function recordView(cellId: string) {
+  function getViewerId() {
+  let viewerId = localStorage.getItem("appicel_viewer_id");
+
+  if (!viewerId) {
+    viewerId = crypto.randomUUID();
+    localStorage.setItem("appicel_viewer_id", viewerId);
+  }
+
+    return viewerId;
+  }
+  
+    async function recordView(cellId: string) {
+    const viewerId = getViewerId();
+
+    const oneHourAgo = new Date(
+      Date.now() - 60 * 60 * 1000
+    ).toISOString();
+
+    const { data: existing } = await supabase
+      .from("cell_views")
+      .select("id")
+      .eq("cell_id", cellId)
+      .eq("viewer_id", viewerId)
+      .gte("created_at", oneHourAgo)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      return;
+    }
+
     await supabase
       .from("cell_views")
-      .insert([{ cell_id: cellId }]);
+      .insert([
+        {
+          cell_id: cellId,
+          viewer_id: viewerId,
+        }
+      ]);
 
     fetchPvRanking();
   }
@@ -473,10 +507,10 @@ export default function Home() {
         Appicel
       </h1>
 
-      <div className="h-[calc(100vh-70px)] flex flex-col md:flex-row overflow-hidden">
+      <div className="relative h-[calc(100vh-70px)] flex flex-col md:block overflow-hidden">
         <div
           ref={containerRef}
-          className="flex-1 min-h-0 flex items-center justify-center overflow-hidden touch-none"
+          className="h-full w-full flex items-center justify-center overflow-hidden touch-none"
           onWheel={handleWheel}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -498,7 +532,7 @@ export default function Home() {
           </div>
         </div>
 
-        <aside className="h-52 md:h-full md:w-64 border-t md:border-t-0 md:border-l border-gray-800 bg-zinc-950 p-3 overflow-y-auto">
+        <aside className="h-52 md:h-full md:w-64 md:absolute md:right-0 md:top-0 border-t md:border-t-0 md:border-l border-gray-800 bg-zinc-950 p-3 overflow-y-auto">
           <h2 className="text-sm font-bold mb-3 text-center">
             24時間閲覧ランキング
           </h2>
@@ -515,10 +549,17 @@ export default function Home() {
                   onClick={() => openCell(item.cell)}
                   className="w-full text-left bg-zinc-900 hover:bg-zinc-800 p-2 rounded text-xs"
                 >
-                  <div className="text-gray-400">
-                    {index + 1}. {item.cell.x}.{item.cell.y} / {item.count}PV
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-400 font-bold text-sm">
+                      #{index + 1}
+                    </span>
+
+                    <span className="text-gray-400 text-xs">
+                      ({item.cell.x},{item.cell.y}) / {item.count}PV
+                    </span>
                   </div>
-                  <div className="truncate">
+
+                  <div className="truncate mt-1">
                     {item.cell.title}
                   </div>
                 </button>
