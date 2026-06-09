@@ -502,15 +502,15 @@ export default function Home() {
   }
 
   return (
-    <main className="h-screen bg-black text-white overflow-hidden">
+    <main className="min-h-screen md:h-screen bg-black text-white overflow-y-auto md:overflow-hidden">
       <h1 className="text-4xl font-bold text-center h-[70px] flex items-center justify-center">
         Appicel
       </h1>
 
-      <div className="relative h-[calc(100vh-70px)] flex flex-col md:block overflow-hidden">
+      <div className="md:relative md:h-[calc(100vh-70px)] flex flex-col md:block overflow-visible md:overflow-hidden">
         <div
           ref={containerRef}
-          className="h-full w-full flex items-center justify-center overflow-hidden touch-none"
+          className="h-[68vh] md:h-full w-full flex items-center justify-center overflow-hidden touch-none"
           onWheel={handleWheel}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -532,7 +532,7 @@ export default function Home() {
           </div>
         </div>
 
-        <aside className="h-52 md:h-full md:w-64 md:absolute md:right-0 md:top-0 border-t md:border-t-0 md:border-l border-gray-800 bg-zinc-950 p-3 overflow-y-auto">
+        <aside className="h-auto md:h-full md:w-64 md:absolute md:right-0 md:top-0 border-t md:border-t-0 md:border-l border-gray-800 bg-zinc-950 p-3 pb-24 md:pb-3 overflow-visible md:overflow-y-auto">
           <h2 className="text-sm font-bold mb-3 text-center">
             24時間閲覧ランキング
           </h2>
