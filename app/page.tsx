@@ -9,7 +9,6 @@ import {
   FaYoutube,
   FaLink
 } from "react-icons/fa6";
-
 import { SiLine } from "react-icons/si";
 import Cropper from "react-easy-crop";
 import { supabase } from "../lib/supabase";
@@ -28,9 +27,9 @@ export default function Home() {
   const [linkType, setLinkType] = useState("other");
   const [linkUrl, setLinkUrl] = useState("");
   const [description, setDescription] = useState("");
+
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
-
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
@@ -38,6 +37,8 @@ export default function Home() {
   const [comments, setComments] = useState<any[]>([]);
   const [commentAuthor, setCommentAuthor] = useState("");
   const [commentBody, setCommentBody] = useState("");
+
+  const [pvRanking, setPvRanking] = useState<any[]>([]);
 
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -63,22 +64,16 @@ export default function Home() {
     switch (type) {
       case "x":
         return <FaXTwitter size={28} />;
-
       case "instagram":
         return <FaInstagram size={28} />;
-
       case "facebook":
         return <FaFacebook size={28} />;
-
       case "tiktok":
         return <FaTiktok size={28} />;
-
       case "line":
         return <SiLine size={28} />;
-
       case "youtube":
         return <FaYoutube size={28} />;
-
       default:
         return <FaLink size={28} />;
     }
@@ -86,18 +81,34 @@ export default function Home() {
 
   useEffect(() => {
     fetchCells();
+    fetchPvRanking();
 
-    const channel = supabase
+    const cellsChannel = supabase
       .channel("cells")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "cells" },
-        () => fetchCells()
+        () => {
+          fetchCells();
+          fetchPvRanking();
+        }
+      )
+      .subscribe();
+
+    const viewsChannel = supabase
+      .channel("cell_views")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "cell_views" },
+        () => {
+          fetchPvRanking();
+        }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(cellsChannel);
+      supabase.removeChannel(viewsChannel);
     };
   }, []);
 
@@ -155,6 +166,42 @@ export default function Home() {
     setCells(data || []);
   }
 
+  async function fetchPvRanking() {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from("cell_views")
+      .select("cell_id, cells(*)")
+      .gte("created_at", since);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const map: any = {};
+
+    data?.forEach((view: any) => {
+      const cell = view.cells;
+      if (!cell) return;
+
+      if (!map[view.cell_id]) {
+        map[view.cell_id] = {
+          cell,
+          count: 0,
+        };
+      }
+
+      map[view.cell_id].count += 1;
+    });
+
+    const ranking = Object.values(map)
+      .sort((a: any, b: any) => b.count - a.count)
+      .slice(0, 10);
+
+    setPvRanking(ranking);
+  }
+
   async function fetchComments(cellId: string) {
     const { data } = await supabase
       .from("comments")
@@ -164,6 +211,19 @@ export default function Home() {
       .limit(100);
 
     setComments(data || []);
+  }
+
+  async function recordView(cellId: string) {
+    await supabase
+      .from("cell_views")
+      .insert([{ cell_id: cellId }]);
+
+    fetchPvRanking();
+  }
+
+  async function openCell(cell: any) {
+    setSelectedCell(cell);
+    recordView(cell.id);
   }
 
   async function saveComment() {
@@ -214,7 +274,7 @@ export default function Home() {
     const existing = getCell(x, y);
 
     if (existing) {
-      setSelectedCell(existing);
+      openCell(existing);
       return;
     }
 
@@ -222,92 +282,92 @@ export default function Home() {
   }
 
   async function saveCell() {
-  if (!createCell) return;
+    if (!createCell) return;
 
-  const finalTitle = title.trim();
-  const finalAuthor = author.trim() || "名無し";
-  const finalDescription = description.trim();
+    const finalTitle = title.trim();
+    const finalAuthor = author.trim() || "名無し";
+    const finalDescription = description.trim();
 
-  if (!finalTitle) {
-    alert("タイトルを入力してください");
-    return;
+    if (!finalTitle) {
+      alert("タイトルを入力してください");
+      return;
+    }
+
+    if (!imageFile || !imagePreview || !croppedAreaPixels) {
+      alert("画像を選択してください");
+      return;
+    }
+
+    let imageUrl = null;
+    let originalImageUrlState = null;
+
+    const originalFileName = `${Date.now()}-original-${imageFile.name}`;
+
+    const { error: originalError } = await supabase.storage
+      .from("cell-images")
+      .upload(originalFileName, imageFile);
+
+    if (originalError) {
+      console.error(originalError);
+      alert(originalError.message);
+      return;
+    }
+
+    const { data: originalData } = supabase.storage
+      .from("cell-images")
+      .getPublicUrl(originalFileName);
+
+    originalImageUrlState = originalData.publicUrl;
+
+    const croppedBlob = await getCroppedImage(
+      imagePreview,
+      croppedAreaPixels
+    );
+
+    const croppedFileName = `${Date.now()}-cropped.jpg`;
+
+    const { error: croppedError } = await supabase.storage
+      .from("cell-images")
+      .upload(croppedFileName, croppedBlob);
+
+    if (croppedError) {
+      console.error(croppedError);
+      alert(croppedError.message);
+      return;
+    }
+
+    const { data: croppedData } = supabase.storage
+      .from("cell-images")
+      .getPublicUrl(croppedFileName);
+
+    imageUrl = croppedData.publicUrl;
+
+    await supabase.from("cells").insert([
+      {
+        x: createCell.x,
+        y: createCell.y,
+        title: finalTitle.slice(0, 15),
+        author: finalAuthor.slice(0, 10),
+        description: finalDescription.slice(0, 200),
+        link_type: linkType,
+        link_url: linkUrl,
+        image_url: imageUrl,
+        original_image_url: originalImageUrlState,
+      },
+    ]);
+
+    setCreateCell(null);
+    setTitle("");
+    setAuthor("");
+    setLinkType("other");
+    setLinkUrl("");
+    setDescription("");
+    setImageFile(null);
+    setImagePreview("");
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedAreaPixels(null);
   }
-
-  if (!imageFile || !imagePreview || !croppedAreaPixels) {
-    alert("画像を選択してください");
-    return;
-  }
-
-  let imageUrl = null;
-  let originalImageUrlState = null;
-
-  const originalFileName = `${Date.now()}-original-${imageFile.name}`;
-
-  const { error: originalError } = await supabase.storage
-    .from("cell-images")
-    .upload(originalFileName, imageFile);
-
-  if (originalError) {
-    console.error(originalError);
-    alert(originalError.message);
-    return;
-  }
-
-  const { data: originalData } = supabase.storage
-    .from("cell-images")
-    .getPublicUrl(originalFileName);
-
-  originalImageUrlState = originalData.publicUrl;
-
-  const croppedBlob = await getCroppedImage(
-    imagePreview,
-    croppedAreaPixels
-  );
-
-  const croppedFileName = `${Date.now()}-cropped.jpg`;
-
-  const { error: croppedError } = await supabase.storage
-    .from("cell-images")
-    .upload(croppedFileName, croppedBlob);
-
-  if (croppedError) {
-    console.error(croppedError);
-    alert(croppedError.message);
-    return;
-  }
-
-  const { data: croppedData } = supabase.storage
-    .from("cell-images")
-    .getPublicUrl(croppedFileName);
-
-  imageUrl = croppedData.publicUrl;
-
-  await supabase.from("cells").insert([
-    {
-      x: createCell.x,
-      y: createCell.y,
-      title: finalTitle.slice(0, 15),
-      author: finalAuthor.slice(0, 10),
-      description: finalDescription.slice(0, 200),
-      link_type: linkType,
-      link_url: linkUrl,
-      image_url: imageUrl,
-      original_image_url: originalImageUrlState,
-    },
-  ]);
-
-  setCreateCell(null);
-  setTitle("");
-  setAuthor("");
-  setLinkType("other");
-  setLinkUrl("");
-  setDescription("");
-  setImageFile(null);
-  setImagePreview("");
-  setCrop({ x: 0, y: 0 });
-  setZoom(1);
-  setCroppedAreaPixels(null);
-}
 
   function handleWheel(e: React.WheelEvent) {
     e.preventDefault();
@@ -413,28 +473,59 @@ export default function Home() {
         Appicel
       </h1>
 
-      <div
-        ref={containerRef}
-        className="w-screen h-[calc(100vh-70px)] flex items-center justify-center overflow-hidden touch-none"
-        onWheel={handleWheel}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-      >
+      <div className="h-[calc(100vh-70px)] flex flex-col md:flex-row overflow-hidden">
         <div
-          className="grid"
-          style={{
-            width: boardSize,
-            height: boardSize,
-            gap: GAP_SIZE,
-            gridTemplateColumns: `repeat(${GRID_SIZE}, ${CELL_SIZE}px)`,
-            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-            transformOrigin: "center center",
-          }}
+          ref={containerRef}
+          className="flex-1 min-h-0 flex items-center justify-center overflow-hidden touch-none"
+          onWheel={handleWheel}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
         >
-          {grid}
+          <div
+            className="grid"
+            style={{
+              width: boardSize,
+              height: boardSize,
+              gap: GAP_SIZE,
+              gridTemplateColumns: `repeat(${GRID_SIZE}, ${CELL_SIZE}px)`,
+              transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+              transformOrigin: "center center",
+            }}
+          >
+            {grid}
+          </div>
         </div>
+
+        <aside className="h-52 md:h-full md:w-64 border-t md:border-t-0 md:border-l border-gray-800 bg-zinc-950 p-3 overflow-y-auto">
+          <h2 className="text-sm font-bold mb-3 text-center">
+            24時間閲覧ランキング
+          </h2>
+
+          {pvRanking.length === 0 ? (
+            <p className="text-xs text-gray-500 text-center">
+              まだ閲覧がありません
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {pvRanking.map((item: any, index: number) => (
+                <button
+                  key={item.cell.id}
+                  onClick={() => openCell(item.cell)}
+                  className="w-full text-left bg-zinc-900 hover:bg-zinc-800 p-2 rounded text-xs"
+                >
+                  <div className="text-gray-400">
+                    {index + 1}. {item.cell.x}.{item.cell.y} / {item.count}PV
+                  </div>
+                  <div className="truncate">
+                    {item.cell.title}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </aside>
       </div>
 
       {selectedCell && (
@@ -451,6 +542,10 @@ export default function Home() {
             >
               ×
             </button>
+
+            <p className="text-[11px] text-gray-500 text-center mb-2">
+              {selectedCell.x}.{selectedCell.y}
+            </p>
 
             <h2 className="text-2xl font-bold mb-2">{selectedCell.title}</h2>
 
@@ -563,6 +658,10 @@ export default function Home() {
             >
               ×
             </button>
+
+            <p className="text-[11px] text-gray-500 text-center mb-2">
+              {createCell.x}.{createCell.y}
+            </p>
 
             <h2 className="text-xl mb-4">新規投稿</h2>
 
