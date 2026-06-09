@@ -32,11 +32,13 @@ export default function Home() {
   const [imagePreview, setImagePreview] = useState("");
 
   const [crop, setCrop] = useState({ x: 0, y: 0 });
-
   const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
 
-  const [croppedAreaPixels, setCroppedAreaPixels] =
-    useState<any>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentAuthor, setCommentAuthor] = useState("");
+  const [commentBody, setCommentBody] = useState("");
+
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
@@ -58,34 +60,30 @@ export default function Home() {
   const boardSize = GRID_SIZE * CELL_SIZE + (GRID_SIZE - 1) * GAP_SIZE;
 
   function LinkIcon(type: string) {
+    switch (type) {
+      case "x":
+        return <FaXTwitter size={28} />;
 
-  switch (type) {
+      case "instagram":
+        return <FaInstagram size={28} />;
 
-    case "x":
-      return <FaXTwitter size={28} />;
+      case "facebook":
+        return <FaFacebook size={28} />;
 
-    case "instagram":
-      return <FaInstagram size={28} />;
+      case "tiktok":
+        return <FaTiktok size={28} />;
 
-    case "facebook":
-      return <FaFacebook size={28} />;
+      case "line":
+        return <SiLine size={28} />;
 
-    case "tiktok":
-      return <FaTiktok size={28} />;
+      case "youtube":
+        return <FaYoutube size={28} />;
 
-    case "line":
-      return <SiLine size={28} />;
-
-    case "youtube":
-      return <FaYoutube size={28} />;
-
-    default:
-      return <FaLink size={28} />;
-
+      default:
+        return <FaLink size={28} />;
+    }
   }
 
-}
-  
   useEffect(() => {
     fetchCells();
 
@@ -97,8 +95,8 @@ export default function Home() {
         () => fetchCells()
       )
       .subscribe();
-    
-      return () => {
+
+    return () => {
       supabase.removeChannel(channel);
     };
   }, []);
@@ -111,6 +109,15 @@ export default function Home() {
       window.removeEventListener("resize", fitBoard);
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedCell?.id) {
+      setComments([]);
+      return;
+    }
+
+    fetchComments(selectedCell.id);
+  }, [selectedCell?.id]);
 
   function fitBoard() {
     if (!containerRef.current) return;
@@ -148,6 +155,55 @@ export default function Home() {
     setCells(data || []);
   }
 
+  async function fetchComments(cellId: string) {
+    const { data } = await supabase
+      .from("comments")
+      .select("*")
+      .eq("cell_id", cellId)
+      .order("created_at", { ascending: true })
+      .limit(100);
+
+    setComments(data || []);
+  }
+
+  async function saveComment() {
+    if (!selectedCell) return;
+
+    const body = commentBody.trim();
+
+    if (!body) {
+      alert("本文を入力してください");
+      return;
+    }
+
+    if (comments.length >= 100) {
+      alert("コメントは最大100件までです");
+      return;
+    }
+
+    const finalAuthor = commentAuthor.trim() || "名無し";
+
+    const { error } = await supabase
+      .from("comments")
+      .insert([
+        {
+          cell_id: selectedCell.id,
+          author: finalAuthor.slice(0, 10),
+          body: body.slice(0, 150),
+        }
+      ]);
+
+    if (error) {
+      console.error(error);
+      alert(error.message);
+      return;
+    }
+
+    setCommentAuthor("");
+    setCommentBody("");
+    fetchComments(selectedCell.id);
+  }
+
   function getCell(x: number, y: number) {
     return cells.find((cell) => cell.x === x && cell.y === y);
   }
@@ -172,48 +228,48 @@ export default function Home() {
     let originalImageUrlState = null;
 
     if (imageFile && imagePreview && croppedAreaPixels) {
-  const originalFileName = `${Date.now()}-original-${imageFile.name}`;
+      const originalFileName = `${Date.now()}-original-${imageFile.name}`;
 
-  const { error: originalError } = await supabase.storage
-    .from("cell-images")
-    .upload(originalFileName, imageFile);
+      const { error: originalError } = await supabase.storage
+        .from("cell-images")
+        .upload(originalFileName, imageFile);
 
-  if (originalError) {
-    console.error(originalError);
-    alert(originalError.message);
-    return;
-  }
+      if (originalError) {
+        console.error(originalError);
+        alert(originalError.message);
+        return;
+      }
 
-  const { data: originalData } = supabase.storage
-    .from("cell-images")
-    .getPublicUrl(originalFileName);
+      const { data: originalData } = supabase.storage
+        .from("cell-images")
+        .getPublicUrl(originalFileName);
 
-  const originalImageUrl = originalData.publicUrl;
+      const originalImageUrl = originalData.publicUrl;
 
-  const croppedBlob = await getCroppedImage(
-    imagePreview,
-    croppedAreaPixels
-  );
+      const croppedBlob = await getCroppedImage(
+        imagePreview,
+        croppedAreaPixels
+      );
 
-  const croppedFileName = `${Date.now()}-cropped.jpg`;
+      const croppedFileName = `${Date.now()}-cropped.jpg`;
 
-  const { error: croppedError } = await supabase.storage
-    .from("cell-images")
-    .upload(croppedFileName, croppedBlob);
+      const { error: croppedError } = await supabase.storage
+        .from("cell-images")
+        .upload(croppedFileName, croppedBlob);
 
-  if (croppedError) {
-    console.error(croppedError);
-    alert(croppedError.message);
-    return;
-  }
+      if (croppedError) {
+        console.error(croppedError);
+        alert(croppedError.message);
+        return;
+      }
 
-  const { data: croppedData } = supabase.storage
-    .from("cell-images")
-    .getPublicUrl(croppedFileName);
+      const { data: croppedData } = supabase.storage
+        .from("cell-images")
+        .getPublicUrl(croppedFileName);
 
-  imageUrl = croppedData.publicUrl;
-  originalImageUrlState = originalImageUrl;
-}
+      imageUrl = croppedData.publicUrl;
+      originalImageUrlState = originalImageUrl;
+    }
 
     await supabase.from("cells").insert([
       {
@@ -372,9 +428,14 @@ export default function Home() {
 
       {selectedCell && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] max-w-[90vw] border border-gray-700">
+          <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] max-w-[90vw] max-h-[90vh] overflow-y-auto border border-gray-700">
             <button
-              onClick={() => setSelectedCell(null)}
+              onClick={() => {
+                setSelectedCell(null);
+                setComments([]);
+                setCommentAuthor("");
+                setCommentBody("");
+              }}
               className="absolute top-3 right-4 text-2xl text-gray-400 hover:text-white"
             >
               ×
@@ -392,50 +453,100 @@ export default function Home() {
               <img
                 src={selectedCell.original_image_url || selectedCell.image_url}
                 alt={selectedCell.title}
-                className="w-full rounded-lg mb-6"
+                className="w-full max-h-[60vh] object-contain rounded-lg mb-6"
               />
             )}
 
             {selectedCell.link_url && (
+              <a
+                href={selectedCell.link_url}
+                target="_blank"
+                rel="noreferrer"
+                className="
+                  inline-flex
+                  items-center
+                  justify-center
+                  w-12
+                  h-12
+                  rounded-full
+                  bg-zinc-800
+                  hover:bg-zinc-700
+                  mb-4
+                "
+              >
+                {LinkIcon(selectedCell.link_type)}
+              </a>
+            )}
 
-  <a
-    href={selectedCell.link_url}
-    target="_blank"
-    rel="noreferrer"
-    className="
-      inline-flex
-      items-center
-      justify-center
-      w-12
-      h-12
-      rounded-full
-      bg-zinc-800
-      hover:bg-zinc-700
-      mb-4
-    "
-  >
-    {LinkIcon(selectedCell.link_type)}
-  </a>
-
-)}
-            
             <p className="text-gray-300 whitespace-pre-wrap mb-6">
               {selectedCell.description}
             </p>
+
+            <div className="border-t border-gray-700 pt-4 mt-4">
+              <h3 className="text-lg font-bold mb-3">
+                コメント {comments.length}/100
+              </h3>
+
+              <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
+                {comments.map((comment) => (
+                  <div
+                    key={comment.id}
+                    className="bg-zinc-800 p-3 rounded"
+                  >
+                    <div className="text-sm text-gray-400 mb-1">
+                      {comment.author || "名無し"}
+                    </div>
+
+                    <div className="text-sm whitespace-pre-wrap">
+                      {comment.body}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <input
+                value={commentAuthor}
+                onChange={(e) => setCommentAuthor(e.target.value)}
+                maxLength={10}
+                placeholder="名前（10文字まで・未入力なら名無し）"
+                className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
+              />
+
+              <textarea
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.target.value)}
+                maxLength={150}
+                placeholder="コメント本文（150文字まで）"
+                className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
+              />
+
+              <button
+                onClick={saveComment}
+                className="bg-white text-black px-4 py-2 rounded"
+              >
+                コメント投稿
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {createCell && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] max-w-[90vw] border border-gray-700">
+          <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] max-w-[90vw] max-h-[90vh] overflow-y-auto border border-gray-700">
             <button
               onClick={() => {
                 setCreateCell(null);
                 setTitle("");
                 setAuthor("");
+                setLinkType("other");
+                setLinkUrl("");
                 setDescription("");
                 setImageFile(null);
+                setImagePreview("");
+                setCrop({ x: 0, y: 0 });
+                setZoom(1);
+                setCroppedAreaPixels(null);
               }}
               className="absolute top-3 right-4 text-2xl text-gray-400 hover:text-white"
             >
@@ -462,7 +573,7 @@ export default function Home() {
               value={linkType}
               onChange={(e) => setLinkType(e.target.value)}
               className="w-full p-2 mb-3 bg-zinc-800 text-white rounded"
-             >
+            >
               <option value="x">X</option>
               <option value="instagram">Instagram</option>
               <option value="facebook">Facebook</option>
@@ -478,7 +589,7 @@ export default function Home() {
               placeholder="リンクURL"
               className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
-            
+
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -490,37 +601,31 @@ export default function Home() {
               type="file"
               accept="image/*"
               onChange={(e) => {
-
                 const file = e.target.files?.[0];
 
                 if (!file) return;
 
                 setImageFile(file);
-
-                setImagePreview(
-                  URL.createObjectURL(file)
-                );
-
+                setImagePreview(URL.createObjectURL(file));
               }}
+              className="w-full mb-4"
             />
-            
-                {imagePreview && (
-                  <div className="h-[300px] relative">
 
-                    <Cropper
-                      image={imagePreview}
-                      crop={crop}
-                      zoom={zoom}
-                      aspect={1}
-                      onCropChange={setCrop}
-                      onZoomChange={setZoom}
-                      onCropComplete={(_, pixels) =>
-                        setCroppedAreaPixels(pixels)
-                      }
-                    />
-
-                 </div>
-               )}
+            {imagePreview && (
+              <div className="h-[300px] relative mb-4">
+                <Cropper
+                  image={imagePreview}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={(_, pixels) =>
+                    setCroppedAreaPixels(pixels)
+                  }
+                />
+              </div>
+            )}
 
             <button
               onClick={saveCell}
