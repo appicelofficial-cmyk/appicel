@@ -222,81 +222,92 @@ export default function Home() {
   }
 
   async function saveCell() {
-    if (!createCell) return;
+  if (!createCell) return;
 
-    let imageUrl = null;
-    let originalImageUrlState = null;
+  const finalTitle = title.trim();
+  const finalAuthor = author.trim() || "名無し";
+  const finalDescription = description.trim();
 
-    if (imageFile && imagePreview && croppedAreaPixels) {
-      const originalFileName = `${Date.now()}-original-${imageFile.name}`;
-
-      const { error: originalError } = await supabase.storage
-        .from("cell-images")
-        .upload(originalFileName, imageFile);
-
-      if (originalError) {
-        console.error(originalError);
-        alert(originalError.message);
-        return;
-      }
-
-      const { data: originalData } = supabase.storage
-        .from("cell-images")
-        .getPublicUrl(originalFileName);
-
-      const originalImageUrl = originalData.publicUrl;
-
-      const croppedBlob = await getCroppedImage(
-        imagePreview,
-        croppedAreaPixels
-      );
-
-      const croppedFileName = `${Date.now()}-cropped.jpg`;
-
-      const { error: croppedError } = await supabase.storage
-        .from("cell-images")
-        .upload(croppedFileName, croppedBlob);
-
-      if (croppedError) {
-        console.error(croppedError);
-        alert(croppedError.message);
-        return;
-      }
-
-      const { data: croppedData } = supabase.storage
-        .from("cell-images")
-        .getPublicUrl(croppedFileName);
-
-      imageUrl = croppedData.publicUrl;
-      originalImageUrlState = originalImageUrl;
-    }
-
-    await supabase.from("cells").insert([
-      {
-        x: createCell.x,
-        y: createCell.y,
-        title,
-        author,
-        description,
-        link_type: linkType,
-        link_url: linkUrl,
-        image_url: imageUrl,
-        original_image_url: originalImageUrlState,
-      },
-    ]);
-
-    setCreateCell(null);
-    setTitle("");
-    setAuthor("");
-    setLinkType("other");
-    setLinkUrl("");
-    setDescription("");
-    setImageFile(null);
-    setImagePreview("");
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-    setCroppedAreaPixels(null);
+  if (!finalTitle) {
+    alert("タイトルを入力してください");
+    return;
   }
+
+  if (!imageFile || !imagePreview || !croppedAreaPixels) {
+    alert("画像を選択してください");
+    return;
+  }
+
+  let imageUrl = null;
+  let originalImageUrlState = null;
+
+  const originalFileName = `${Date.now()}-original-${imageFile.name}`;
+
+  const { error: originalError } = await supabase.storage
+    .from("cell-images")
+    .upload(originalFileName, imageFile);
+
+  if (originalError) {
+    console.error(originalError);
+    alert(originalError.message);
+    return;
+  }
+
+  const { data: originalData } = supabase.storage
+    .from("cell-images")
+    .getPublicUrl(originalFileName);
+
+  originalImageUrlState = originalData.publicUrl;
+
+  const croppedBlob = await getCroppedImage(
+    imagePreview,
+    croppedAreaPixels
+  );
+
+  const croppedFileName = `${Date.now()}-cropped.jpg`;
+
+  const { error: croppedError } = await supabase.storage
+    .from("cell-images")
+    .upload(croppedFileName, croppedBlob);
+
+  if (croppedError) {
+    console.error(croppedError);
+    alert(croppedError.message);
+    return;
+  }
+
+  const { data: croppedData } = supabase.storage
+    .from("cell-images")
+    .getPublicUrl(croppedFileName);
+
+  imageUrl = croppedData.publicUrl;
+
+  await supabase.from("cells").insert([
+    {
+      x: createCell.x,
+      y: createCell.y,
+      title: finalTitle.slice(0, 15),
+      author: finalAuthor.slice(0, 10),
+      description: finalDescription.slice(0, 200),
+      link_type: linkType,
+      link_url: linkUrl,
+      image_url: imageUrl,
+      original_image_url: originalImageUrlState,
+    },
+  ]);
+
+  setCreateCell(null);
+  setTitle("");
+  setAuthor("");
+  setLinkType("other");
+  setLinkUrl("");
+  setDescription("");
+  setImageFile(null);
+  setImagePreview("");
+  setCrop({ x: 0, y: 0 });
+  setZoom(1);
+  setCroppedAreaPixels(null);
+}
 
   function handleWheel(e: React.WheelEvent) {
     e.preventDefault();
@@ -558,14 +569,16 @@ export default function Home() {
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="タイトル"
+              maxLength={15}
+              placeholder="タイトル（15文字まで・必須）"
               className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
 
             <input
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
-              placeholder="投稿者名"
+              maxLength={10}
+              placeholder="投稿者名（10文字まで・空欄なら名無し）"
               className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
 
@@ -593,23 +606,39 @@ export default function Home() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="本文"
+              maxLength={200}
+              placeholder="本文（200文字まで）"
               className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
 
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
+            <label className="block w-full mb-4 cursor-pointer">
+              <div className="bg-blue-600 hover:bg-blue-500 text-white text-center py-3 rounded font-bold">
+                画像を選択
+              </div>
 
-                if (!file) return;
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
 
-                setImageFile(file);
-                setImagePreview(URL.createObjectURL(file));
-              }}
-              className="w-full mb-4"
-            />
+                  if (!file) return;
+
+                  setImageFile(file);
+                  setImagePreview(URL.createObjectURL(file));
+                  setCrop({ x: 0, y: 0 });
+                  setZoom(1);
+                  setCroppedAreaPixels(null);
+                }}
+                className="hidden"
+              />
+            </label>
+
+            {imageFile && (
+              <p className="text-sm text-gray-400 mb-4">
+                選択中：{imageFile.name}
+              </p>
+            )}
 
             {imagePreview && (
               <div className="h-[300px] relative mb-4">
