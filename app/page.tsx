@@ -220,7 +220,7 @@ export default function Home() {
 
     const ranking = Object.values(map)
       .sort((a: any, b: any) => b.count - a.count)
-      .slice(0, 10);
+      .slice(0, 20);
 
     setPvRanking(ranking);
   }
@@ -565,7 +565,7 @@ export default function Home() {
 
         <aside className="h-auto md:h-full md:w-64 md:absolute md:right-0 md:top-0 border-t md:border-t-0 md:border-l border-gray-800 bg-zinc-950 p-3 pb-24 md:pb-3 overflow-visible md:overflow-y-auto">
           <h2 className="text-sm font-bold mb-3 text-center">
-            24時間閲覧ランキング
+            24時間閲覧ランキング(TOP20)
           </h2>
 
           {pvRanking.length === 0 ? (
