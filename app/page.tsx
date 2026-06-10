@@ -861,19 +861,6 @@ export default function Home() {
                 className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
               />
 
-              <input
-                type="password"
-                value={deletePassword}
-                onChange={(e) => setDeletePassword(e.target.value)}
-                maxLength={50}
-                placeholder="削除用パスワード（任意・4文字以上）"
-                className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
-              />
-
-              <p className="text-[11px] text-gray-500 mb-3">
-                設定した場合のみ、期限前に自分で削除できます。
-              </p>
-
               <div className="flex items-center justify-between">
                <button
                  onClick={saveComment}
@@ -978,6 +965,19 @@ export default function Home() {
               placeholder="本文（200文字まで）"
               className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
+
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              maxLength={50}
+              placeholder="削除用パスワード（任意・4文字以上）"
+              className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
+            />
+
+            <p className="text-[11px] text-gray-500 mb-3">
+              設定した場合のみ、期限前に自分で削除できます。
+            </p>
 
             <label className="block w-full mb-4 cursor-pointer">
               <div className="bg-blue-600 hover:bg-blue-500 text-white text-center py-3 rounded font-bold">
