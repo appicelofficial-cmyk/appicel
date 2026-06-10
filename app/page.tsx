@@ -40,6 +40,9 @@ export default function Home() {
 
   const [pvRanking, setPvRanking] = useState<any[]>([]);
 
+  const [cellNotice, setCellNotice] = useState("");
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
@@ -79,6 +82,22 @@ export default function Home() {
     }
   }
 
+  function showCellNotice(cell: any) {
+    const name = cell.author?.trim() || "名無し";
+
+    setCellNotice(
+      `${name}さんが（${cell.x}.${cell.y}）のセルを埋めました！`
+    );
+
+    if (noticeTimerRef.current) {
+      clearTimeout(noticeTimerRef.current);
+    }
+
+    noticeTimerRef.current = setTimeout(() => {
+      setCellNotice("");
+    }, 5000);
+  }
+
   useEffect(() => {
     fetchCells();
     fetchPvRanking();
@@ -88,9 +107,13 @@ export default function Home() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "cells" },
-        () => {
+        (payload: any) => {
           fetchCells();
           fetchPvRanking();
+
+          if (payload.eventType === "INSERT") {
+            showCellNotice(payload.new);
+          }
         }
       )
       .subscribe();
@@ -506,8 +529,16 @@ export default function Home() {
       <h1 className="text-4xl font-bold text-center h-[70px] flex items-center justify-center">
         Appicel
       </h1>
+      
+      <div className="h-10 flex items-center justify-center">
+        {cellNotice && (
+          <div className="px-4 py-2 rounded-full bg-green-500/20 border border-green-400 text-green-300 text-sm font-bold animate-bounce">
+            {cellNotice}
+          </div>
+        )}
+      </div>
 
-      <div className="md:relative md:h-[calc(100vh-70px)] flex flex-col md:block overflow-visible md:overflow-hidden">
+      <div className="md:relative md:h-[calc(100vh-110px)] flex flex-col md:block overflow-visible md:overflow-hidden">
         <div
           ref={containerRef}
           className="h-[68vh] md:h-full w-full flex items-center justify-center overflow-hidden touch-none"
