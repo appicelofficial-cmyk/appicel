@@ -27,6 +27,7 @@ export default function Home() {
   const [linkType, setLinkType] = useState("other");
   const [linkUrl, setLinkUrl] = useState("");
   const [description, setDescription] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -376,6 +377,43 @@ export default function Home() {
     alert("セルを削除しました");
   }
   
+  async function userDeleteCell(cell: any) {
+    const inputPassword = window.prompt("削除用パスワードを入力してください");
+
+    if (!inputPassword) return;
+
+    const ok = window.confirm(
+      `本当に（${cell.x},${cell.y}）のセルを削除しますか？`
+    );
+
+    if (!ok) return;
+
+    const response = await fetch("/api/user-delete-cell", {
+      method: "POST",
+      headers: {
+      "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        cellId: cell.id,
+        deletePassword: inputPassword,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.error || "削除できませんでした");
+      return;
+    }
+
+    setSelectedCell(null);
+    setComments([]);
+    fetchCells();
+    fetchPvRanking();
+
+   alert("セルを削除しました");
+  }
+
   async function openCell(cell: any) {
     setSelectedCell(cell);
     recordView(cell.id);
@@ -497,20 +535,31 @@ export default function Home() {
 
     imageUrl = croppedData.publicUrl;
 
-    await supabase.from("cells").insert([
-      {
+    const response = await fetch("/api/create-cell", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
         x: createCell.x,
         y: createCell.y,
-        title: finalTitle.slice(0, 15),
-        author: finalAuthor.slice(0, 10),
-        description: finalDescription.slice(0, 200),
-        link_type: linkType,
+        title: finalTitle,
+        author: finalAuthor,
+        description: finalDescription,
+       link_type: linkType,
         link_url: linkUrl,
         image_url: imageUrl,
         original_image_url: originalImageUrlState,
-        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-      },
-    ]);
+        deletePassword: deletePassword.trim(),
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.error || "投稿に失敗しました");
+      return;
+    }
 
     setCreateCell(null);
     setTitle("");
@@ -518,11 +567,15 @@ export default function Home() {
     setLinkType("other");
     setLinkUrl("");
     setDescription("");
+    setDeletePassword("");
     setImageFile(null);
     setImagePreview("");
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCroppedAreaPixels(null);
+
+    fetchCells();
+    fetchPvRanking();
   }
 
   function handleWheel(e: React.WheelEvent) {
@@ -808,13 +861,36 @@ export default function Home() {
                 className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
               />
 
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                maxLength={50}
+                placeholder="削除用パスワード（任意・4文字以上）"
+                className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
+              />
+
+              <p className="text-[11px] text-gray-500 mb-3">
+                設定した場合のみ、期限前に自分で削除できます。
+              </p>
+
               <div className="flex items-center justify-between">
-                <button
-                  onClick={saveComment}
-                  className="bg-white text-black px-4 py-2 rounded"
-                >
-                  コメント投稿
-                </button>
+               <button
+                 onClick={saveComment}
+                 className="bg-white text-black px-4 py-2 rounded"
+               >
+                 コメント投稿
+               </button>
+
+               <div className="flex items-center gap-3">
+                 {selectedCell.has_delete_password && (
+                   <button
+                     onClick={() => userDeleteCell(selectedCell)}
+                     className="text-[11px] text-blue-300/80 hover:text-blue-300"
+                   >
+                     投稿者削除
+                   </button>
+                 )}
 
                 <button
                   onClick={() => adminDeleteCell(selectedCell)}
@@ -823,7 +899,8 @@ export default function Home() {
                   管理者削除
                 </button>
               </div>
-            </div>
+             </div>
+           </div>
           </div>
         </div>
       )}
@@ -839,6 +916,7 @@ export default function Home() {
                 setLinkType("other");
                 setLinkUrl("");
                 setDescription("");
+                setDeletePassword("");
                 setImageFile(null);
                 setImagePreview("");
                 setCrop({ x: 0, y: 0 });
