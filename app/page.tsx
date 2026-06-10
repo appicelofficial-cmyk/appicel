@@ -40,6 +40,8 @@ export default function Home() {
 
   const [pvRanking, setPvRanking] = useState<any[]>([]);
 
+  const [nowTime, setNowTime] = useState(Date.now());
+
   const [cellNotice, setCellNotice] = useState("");
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
@@ -152,6 +154,23 @@ export default function Home() {
 
     fetchComments(selectedCell.id);
   }, [selectedCell?.id]);
+  
+  useEffect(() => {
+    deleteExpiredCells();
+
+    const deleteTimer = setInterval(() => {
+      deleteExpiredCells();
+    }, 30000);
+
+    const clockTimer = setInterval(() => {
+      setNowTime(Date.now());
+    }, 1000);
+
+    return () => {
+      clearInterval(deleteTimer);
+      clearInterval(clockTimer);
+    };
+  }, []);
 
   function fitBoard() {
     if (!containerRef.current) return;
@@ -187,6 +206,36 @@ export default function Home() {
   async function fetchCells() {
     const { data } = await supabase.from("cells").select("*");
     setCells(data || []);
+  }
+  
+  async function deleteExpiredCells() {
+    const now = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("cells")
+      .delete()
+      .lt("expires_at", now);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    fetchCells();
+    fetchPvRanking();
+  }
+
+  function formatRemaining(expiresAt: string | null) {
+    if (!expiresAt) return "期限なし";
+
+    const diff = new Date(expiresAt).getTime() - nowTime;
+
+    if (diff <= 0) return "期限切れ";
+
+    const minutes = Math.floor(diff / 1000 / 60);
+    const seconds = Math.floor((diff / 1000) % 60);
+
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
   }
 
   async function fetchPvRanking() {
@@ -410,6 +459,7 @@ export default function Home() {
         link_url: linkUrl,
         image_url: imageUrl,
         original_image_url: originalImageUrlState,
+        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       },
     ]);
 
@@ -619,6 +669,10 @@ export default function Home() {
               {selectedCell.x}.{selectedCell.y}
             </p>
 
+            <div className="absolute top-3 left-4 text-[11px] text-gray-400">
+              残り {formatRemaining(selectedCell.expires_at)}
+            </div>
+            
             <h2 className="text-2xl font-bold mb-2">{selectedCell.title}</h2>
 
             {selectedCell.author && (
