@@ -43,6 +43,7 @@ export default function Home() {
   const [nowTime, setNowTime] = useState(Date.now());
 
   const [cellNotice, setCellNotice] = useState("");
+  const [cellNoticeCell, setCellNoticeCell] = useState<any | null>(null);
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const [scale, setScale] = useState(1);
@@ -91,12 +92,15 @@ export default function Home() {
       `${name}さんが（${cell.x}.${cell.y}）のセルを埋めました！`
     );
 
+    setCellNoticeCell(cell);
+
     if (noticeTimerRef.current) {
       clearTimeout(noticeTimerRef.current);
     }
 
     noticeTimerRef.current = setTimeout(() => {
       setCellNotice("");
+      setCellNoticeCell(null);
     }, 5000);
   }
 
@@ -627,9 +631,16 @@ export default function Home() {
       
       <div className="h-10 flex items-center justify-center">
         {cellNotice && (
-          <div className="px-4 py-2 rounded-full bg-green-500/20 border border-green-400 text-green-300 text-sm font-bold animate-bounce">
+          <button
+            onClick={() => {
+              if (cellNoticeCell) {
+                openCell(cellNoticeCell);
+              }
+            }}
+            className="px-4 py-2 rounded-full bg-green-500/20 border border-green-400 text-green-300 text-sm font-bold animate-bounce hover:bg-green-500/30"
+          >
             {cellNotice}
-          </div>
+          </button>
         )}
       </div>
 
@@ -758,13 +769,6 @@ export default function Home() {
             <p className="text-gray-300 whitespace-pre-wrap mb-6">
               {selectedCell.description}
             </p>
-
-            <button
-              onClick={() => adminDeleteCell(selectedCell)}
-              className="text-xs text-red-400 hover:text-red-300 mb-4"
-            >
-              管理者削除
-            </button>
             
             <div className="border-t border-gray-700 pt-4 mt-4">
               <h3 className="text-lg font-bold mb-3">
@@ -804,12 +808,21 @@ export default function Home() {
                 className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
               />
 
-              <button
-                onClick={saveComment}
-                className="bg-white text-black px-4 py-2 rounded"
-              >
-                コメント投稿
-              </button>
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={saveComment}
+                  className="bg-white text-black px-4 py-2 rounded"
+                >
+                  コメント投稿
+                </button>
+
+                <button
+                  onClick={() => adminDeleteCell(selectedCell)}
+                  className="text-[11px] text-blue-500/60 hover:text-blue-400"
+                >
+                  管理者削除
+                </button>
+              </div>
             </div>
           </div>
         </div>
