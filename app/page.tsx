@@ -335,6 +335,43 @@ export default function Home() {
     fetchPvRanking();
   }
 
+  async function adminDeleteCell(cell: any) {
+    const adminKey = window.prompt("管理者パスワードを入力してください");
+
+    if (!adminKey) return;
+
+    const ok = window.confirm(
+      `本当に（${cell.x},${cell.y}）のセルを削除しますか？`
+    );
+
+    if (!ok) return;
+
+    const response = await fetch("/api/admin-delete-cell", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        cellId: cell.id,
+        adminKey,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.error || "削除できませんでした");
+      return;
+    }
+
+    setSelectedCell(null);
+    setComments([]);
+    fetchCells();
+    fetchPvRanking();
+
+    alert("セルを削除しました");
+  }
+  
   async function openCell(cell: any) {
     setSelectedCell(cell);
     recordView(cell.id);
@@ -722,6 +759,13 @@ export default function Home() {
               {selectedCell.description}
             </p>
 
+            <button
+              onClick={() => adminDeleteCell(selectedCell)}
+              className="text-xs text-red-400 hover:text-red-300 mb-4"
+            >
+              管理者削除
+            </button>
+            
             <div className="border-t border-gray-700 pt-4 mt-4">
               <h3 className="text-lg font-bold mb-3">
                 コメント {comments.length}/100
