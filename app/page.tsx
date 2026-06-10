@@ -160,7 +160,7 @@ export default function Home() {
 
     const deleteTimer = setInterval(() => {
       deleteExpiredCells();
-    }, 30000);
+    }, 1000);
 
     const clockTimer = setInterval(() => {
       setNowTime(Date.now());
@@ -225,10 +225,18 @@ export default function Home() {
     fetchPvRanking();
   }
 
+  function parseExpiresAt(expiresAt: string) {
+    if (expiresAt.endsWith("Z")) {
+      return new Date(expiresAt).getTime();
+    }
+
+    return new Date(expiresAt + "Z").getTime();
+  }
+  
   function formatRemaining(expiresAt: string | null) {
     if (!expiresAt) return "期限なし";
 
-    const diff = new Date(expiresAt).getTime() - nowTime;
+    const diff = parseExpiresAt(expiresAt) - nowTime;
 
     if (diff <= 0) return "期限切れ";
 
