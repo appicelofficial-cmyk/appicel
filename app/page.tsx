@@ -783,12 +783,14 @@ export default function Home() {
               ×
             </button>
 
-            <p className="text-[11px] text-gray-500 text-center mb-2">
-              {selectedCell.x}.{selectedCell.y}
-            </p>
+            <div className="relative h-5 mb-2">
+              <div className="absolute left-0 top-0 text-[11px] text-gray-400">
+                残り {formatRemaining(selectedCell.expires_at)}
+              </div>
 
-            <div className="absolute top-3 left-4 text-[11px] text-gray-400">
-              残り {formatRemaining(selectedCell.expires_at)}
+              <p className="text-[11px] text-gray-500 text-center">
+                {selectedCell.x}.{selectedCell.y}
+              </p>
             </div>
             
             <h2 className="text-2xl font-bold mb-2">{selectedCell.title}</h2>
@@ -1034,22 +1036,6 @@ export default function Home() {
                     onCropComplete={(_, pixels) =>
                       setCroppedAreaPixels(pixels)
                     }
-                  />
-                </div>
-
-                <div className="mb-2">
-                  <p className="text-xs text-gray-400 mb-1">
-                    画像サイズ調整
-                  </p>
-
-                  <input
-                    type="range"
-                    min={0.5}
-                    max={4}
-                    step={0.01}
-                    value={zoom}
-                    onChange={(e) => setZoom(Number(e.target.value))}
-                    className="w-full"
                   />
                 </div>
               </div>
