@@ -189,6 +189,10 @@ export default function Home() {
     setPosition({ x: 0, y: 0 });
   }
 
+  function isPcLayout() {
+    return typeof window !== "undefined" && window.innerWidth >= 768;
+  }
+  
   function clampPosition(nextX: number, nextY: number, nextScale = scale) {
     if (!containerRef.current) {
       return { x: nextX, y: nextY };
@@ -199,12 +203,17 @@ export default function Home() {
 
     const visualSize = boardSize * nextScale;
 
-    const maxX = Math.max((visualSize - cw) / 2, 0);
-    const maxY = Math.max((visualSize - ch) / 2, 0);
+    const baseMaxX = Math.max((visualSize - cw) / 2, 0);
+    const baseMaxY = Math.max((visualSize - ch) / 2, 0);
+
+    const rankingWidth = isPcLayout() && visualSize > cw ? 280 : 0;
+
+    const minX = -baseMaxX - rankingWidth;
+    const maxX = baseMaxX;
 
     return {
-      x: Math.min(Math.max(nextX, -maxX), maxX),
-      y: Math.min(Math.max(nextY, -maxY), maxY),
+      x: Math.min(Math.max(nextX, minX), maxX),
+      y: Math.min(Math.max(nextY, -baseMaxY), baseMaxY),
     };
   }
 
@@ -1009,18 +1018,40 @@ export default function Home() {
             )}
 
             {imagePreview && (
-              <div className="h-[300px] relative mb-4">
-                <Cropper
-                  image={imagePreview}
-                  crop={crop}
-                  zoom={zoom}
-                  aspect={1}
-                  onCropChange={setCrop}
-                  onZoomChange={setZoom}
-                  onCropComplete={(_, pixels) =>
-                    setCroppedAreaPixels(pixels)
-                  }
-                />
+              <div className="mb-4">
+                <div className="h-[300px] relative mb-3 bg-black rounded overflow-hidden">
+                  <Cropper
+                    image={imagePreview}
+                    crop={crop}
+                    zoom={zoom}
+                    minZoom={0.5}
+                    maxZoom={4}
+                    aspect={1}
+                    restrictPosition={false}
+                    objectFit="contain"
+                    onCropChange={setCrop}
+                    onZoomChange={setZoom}
+                    onCropComplete={(_, pixels) =>
+                      setCroppedAreaPixels(pixels)
+                    }
+                  />
+                </div>
+
+                <div className="mb-2">
+                  <p className="text-xs text-gray-400 mb-1">
+                    画像サイズ調整
+                  </p>
+
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={4}
+                    step={0.01}
+                    value={zoom}
+                    onChange={(e) => setZoom(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
               </div>
             )}
 
@@ -1042,10 +1073,12 @@ async function getCroppedImage(
   crop: any
 ): Promise<Blob> {
   const image = new Image();
+  image.crossOrigin = "anonymous";
   image.src = imageSrc;
 
-  await new Promise((resolve) => {
+  await new Promise((resolve, reject) => {
     image.onload = resolve;
+    image.onerror = reject;
   });
 
   const canvas = document.createElement("canvas");
@@ -1053,20 +1086,47 @@ async function getCroppedImage(
 
   if (!ctx) throw new Error("Canvas error");
 
-  canvas.width = crop.width;
-  canvas.height = crop.height;
+  const cropX = Math.round(crop.x);
+  const cropY = Math.round(crop.y);
+  const cropWidth = Math.round(crop.width);
+  const cropHeight = Math.round(crop.height);
 
-  ctx.drawImage(
-    image,
-    crop.x,
-    crop.y,
-    crop.width,
-    crop.height,
-    0,
-    0,
-    crop.width,
-    crop.height
+  canvas.width = cropWidth;
+  canvas.height = cropHeight;
+
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, cropWidth, cropHeight);
+
+  const sourceX = Math.max(cropX, 0);
+  const sourceY = Math.max(cropY, 0);
+  const sourceRight = Math.min(
+    cropX + cropWidth,
+    image.naturalWidth
   );
+  const sourceBottom = Math.min(
+    cropY + cropHeight,
+    image.naturalHeight
+  );
+
+  const sourceWidth = sourceRight - sourceX;
+  const sourceHeight = sourceBottom - sourceY;
+
+  const destX = sourceX - cropX;
+  const destY = sourceY - cropY;
+
+  if (sourceWidth > 0 && sourceHeight > 0) {
+    ctx.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      destX,
+      destY,
+      sourceWidth,
+      sourceHeight
+    );
+  }
 
   return new Promise((resolve) => {
     canvas.toBlob((blob) => {
