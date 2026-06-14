@@ -22,38 +22,55 @@ const PLANS = {
     label: "リリース記念：通常1日無料",
     priceText: "無料",
     descriptionMax: 200,
+    linkMax: 2,
   },
   normal_1d: {
     label: "通常1日",
     priceText: "100円",
     descriptionMax: 200,
+    linkMax: 2,
   },
   normal_7d: {
     label: "通常7日",
     priceText: "600円",
     descriptionMax: 200,
+    linkMax: 2,
   },
   normal_30d: {
     label: "通常30日",
     priceText: "2,500円",
     descriptionMax: 200,
+    linkMax: 2,
   },
   premium_1d: {
     label: "プレミアム1日",
     priceText: "250円",
     descriptionMax: 500,
+    linkMax: 5,
   },
   premium_7d: {
     label: "プレミアム7日",
     priceText: "1,500円",
     descriptionMax: 500,
+    linkMax: 5,
   },
   premium_30d: {
     label: "プレミアム30日",
     priceText: "6,000円",
     descriptionMax: 500,
+    linkMax: 5,
   },
 } as const;
+
+const LINK_TYPES = [
+  { value: "x", label: "X" },
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Facebook" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "line", label: "LINE" },
+  { value: "youtube", label: "YouTube" },
+  { value: "other", label: "Other" },
+];
 
 export default function Home() {
   const [cells, setCells] = useState<any[]>([]);
@@ -64,6 +81,14 @@ export default function Home() {
   const [author, setAuthor] = useState("");
   const [linkType, setLinkType] = useState("other");
   const [linkUrl, setLinkUrl] = useState("");
+  const [links, setLinks] = useState([
+    {
+      link_type: "other",
+      link_url: "",
+    },
+  ]);
+
+  const [selectedCellLinks, setSelectedCellLinks] = useState<any[]>([]);
   const [description, setDescription] = useState("");
   const [selectedPlanId, setSelectedPlanId] = useState("normal_free_1d");
   const [deletePassword, setDeletePassword] = useState("");
@@ -193,10 +218,12 @@ export default function Home() {
   useEffect(() => {
     if (!selectedCell?.id) {
       setComments([]);
+      setSelectedCellLinks([]);
       return;
     }
 
     fetchComments(selectedCell.id);
+    fetchCellLinks(selectedCell.id);
   }, [selectedCell?.id]);
   
   useEffect(() => {
@@ -348,6 +375,59 @@ export default function Home() {
       .limit(100);
 
     setComments(data || []);
+  }
+  
+  async function fetchCellLinks(cellId: string) {
+    const { data } = await supabase
+      .from("cell_links")
+      .select("*")
+      .eq("cell_id", cellId)
+      .order("sort_order", { ascending: true });
+
+    setSelectedCellLinks(data || []);
+  }
+
+  function updateLink(index: number, key: "link_type" | "link_url", value: string) {
+    setLinks((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        [key]: value,
+      };
+      return next;
+    });
+  }
+
+  function addLinkInput() {
+    const currentPlan = PLANS[selectedPlanId as keyof typeof PLANS];
+
+    if (links.length >= currentPlan.linkMax) {
+      alert(`リンクは最大${currentPlan.linkMax}個までです`);
+      return;
+    }
+
+    setLinks((prev) => [
+      ...prev,
+      {
+        link_type: "other",
+        link_url: "",
+      },
+    ]);
+  }
+
+  function removeLinkInput(index: number) {
+    setLinks((prev) => {
+      if (prev.length <= 1) {
+        return [
+          {
+            link_type: "other",
+            link_url: "",
+          },
+        ];
+      }
+
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   function getViewerId() {
@@ -598,14 +678,21 @@ export default function Home() {
         title: finalTitle,
         author: finalAuthor,
         description: finalDescription,
-       link_type: linkType,
+        link_type: linkType,
         link_url: linkUrl,
         image_url: imageUrl,
         original_image_url: originalImageUrlState,
         deletePassword: deletePassword.trim(),
         planId: selectedPlanId,
         viewerId: getViewerId(),
-      }),
+        links: links
+          .map((link, index) => ({
+           link_type: link.link_type,
+           link_url: link.link_url.trim(),
+           sort_order: index,
+         }))
+         .filter((link) => link.link_url),
+     }),
     });
 
     const result = await response.json();
@@ -820,6 +907,7 @@ export default function Home() {
             <button
               onClick={() => {
                 setSelectedCell(null);
+                setSelectedCellLinks([]);
                 setComments([]);
                 setCommentAuthor("");
                 setCommentBody("");
@@ -855,26 +943,52 @@ export default function Home() {
               />
             )}
 
-            {selectedCell.link_url && (
-              <a
-                href={selectedCell.link_url}
-                target="_blank"
-                rel="noreferrer"
-                className="
-                  inline-flex
-                  items-center
-                  justify-center
-                  w-12
-                  h-12
-                  rounded-full
-                  bg-zinc-800
-                  hover:bg-zinc-700
-                  mb-4
-                "
-              >
-                {LinkIcon(selectedCell.link_type)}
-              </a>
-            )}
+            {(
+              selectedCellLinks.length > 0
+                ? selectedCellLinks
+                : selectedCell.link_url
+                ? [
+                    {
+                      link_type: selectedCell.link_type,
+                      link_url: selectedCell.link_url,
+                    },
+                  ]
+                : []
+          ).length > 0 && (
+            <div className="flex flex-wrap gap-3 mb-4">
+              {(
+                selectedCellLinks.length > 0
+                  ? selectedCellLinks
+                  : selectedCell.link_url
+                    ? [
+                        {
+                          link_type: selectedCell.link_type,
+                          link_url: selectedCell.link_url,
+                        },
+                      ]
+                    : []
+              ).map((link: any, index: number) => (
+                <a
+                  key={index}
+                  href={link.link_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="
+                    inline-flex
+                    items-center
+                    justify-center
+                    w-12
+                    h-12
+                    rounded-full
+                    bg-zinc-800
+                    hover:bg-zinc-700
+                  "
+                >
+                  {LinkIcon(link.link_type)}
+                </a>
+              ))}
+            </div>
+          )}
 
             <p className="text-gray-300 whitespace-pre-wrap mb-6">
               {selectedCell.description}
@@ -959,6 +1073,12 @@ export default function Home() {
                 setAuthor("");
                 setLinkType("other");
                 setLinkUrl("");
+                setLinks([
+                  {
+                    link_type: "other",
+                    link_url: "",
+                  },
+                ]);
                 setDescription("");
                 setDeletePassword("");
                 setSelectedPlanId("normal_free_1d");
@@ -981,9 +1101,17 @@ export default function Home() {
 
             <select
               value={selectedPlanId}
-              onChange={(e) => setSelectedPlanId(e.target.value)}
+              onChange={(e) => {
+                const nextPlanId = e.target.value as keyof typeof PLANS;
+                const nextPlan = PLANS[nextPlanId];
+
+                setSelectedPlanId(nextPlanId);
+                setDescription((prev) => prev.slice(0, nextPlan.descriptionMax));
+                setLinks((prev) => prev.slice(0, nextPlan.linkMax));
+              }}
               className="w-full p-2 mb-2 bg-zinc-800 text-white rounded"
             >
+            
               {Object.entries(PLANS).map(([id, plan]) => (
                 <option key={id} value={id}>
                   {plan.label} / {plan.priceText}
@@ -1011,26 +1139,60 @@ export default function Home() {
               className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
 
-            <select
-              value={linkType}
-              onChange={(e) => setLinkType(e.target.value)}
-              className="w-full p-2 mb-3 bg-zinc-800 text-white rounded"
-            >
-              <option value="x">X</option>
-              <option value="instagram">Instagram</option>
-              <option value="facebook">Facebook</option>
-              <option value="tiktok">TikTok</option>
-              <option value="line">LINE</option>
-              <option value="youtube">YouTube</option>
-              <option value="other">Other</option>
-            </select>
+            <div className="mb-3">
+              <p className="text-sm font-bold mb-2">
+                リンク（最大{PLANS[selectedPlanId as keyof typeof PLANS].linkMax}個）
+              </p>
 
-            <input
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="リンクURL"
-              className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
-            />
+              <div className="space-y-2">
+                {links.map((link, index) => (
+                  <div key={index} className="bg-zinc-800 p-2 rounded">
+                    <div className="flex gap-2 mb-2">
+                      <select
+                        value={link.link_type}
+                        onChange={(e) =>
+                          updateLink(index, "link_type", e.target.value)
+                        }
+                        className="w-32 p-2 bg-zinc-700 text-white rounded"
+                      >
+                        {LINK_TYPES.map((type) => (
+                          <option key={type.value} value={type.value}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => removeLinkInput(index)}
+                        className="px-3 bg-zinc-700 hover:bg-zinc-600 rounded text-sm"
+                      >
+                        削除
+                      </button>
+                    </div>
+
+                    <input
+                      value={link.link_url}
+                      onChange={(e) =>
+                        updateLink(index, "link_url", e.target.value)
+                      }
+                      placeholder="リンクURL"
+                      className="w-full p-2 bg-zinc-700 text-white placeholder-gray-400 rounded"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {links.length < PLANS[selectedPlanId as keyof typeof PLANS].linkMax && (
+                <button
+                  type="button"
+                  onClick={addLinkInput}
+                  className="mt-2 text-sm text-blue-400 hover:text-blue-300"
+                >
+                  ＋リンクを追加
+                </button>
+              )}
+            </div>
 
             <textarea
               value={description}

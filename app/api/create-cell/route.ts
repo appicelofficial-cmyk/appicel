@@ -9,6 +9,7 @@ const PLANS = {
     rentalDays: 1,
     isPremium: false,
     descriptionMax: 200,
+    linkMax: 2,
   },
   normal_1d: {
     label: "通常1日",
@@ -16,6 +17,7 @@ const PLANS = {
     rentalDays: 1,
     isPremium: false,
     descriptionMax: 200,
+    linkMax: 2,
   },
   normal_7d: {
     label: "通常7日",
@@ -23,6 +25,7 @@ const PLANS = {
     rentalDays: 7,
     isPremium: false,
     descriptionMax: 200,
+    linkMax: 2,
   },
   normal_30d: {
     label: "通常30日",
@@ -30,6 +33,7 @@ const PLANS = {
     rentalDays: 30,
     isPremium: false,
     descriptionMax: 200,
+    linkMax: 2,
   },
   premium_1d: {
     label: "プレミアム1日",
@@ -37,6 +41,7 @@ const PLANS = {
     rentalDays: 1,
     isPremium: true,
     descriptionMax: 500,
+    linkMax: 5,
   },
   premium_7d: {
     label: "プレミアム7日",
@@ -44,6 +49,7 @@ const PLANS = {
     rentalDays: 7,
     isPremium: true,
     descriptionMax: 500,
+    linkMax: 5,
   },
   premium_30d: {
     label: "プレミアム30日",
@@ -51,6 +57,7 @@ const PLANS = {
     rentalDays: 30,
     isPremium: true,
     descriptionMax: 500,
+    linkMax: 5,
   },
 } as const;
 
@@ -106,13 +113,14 @@ export async function POST(request: Request) {
       title,
       author,
       description,
-      link_type,
-      link_url,
       image_url,
       original_image_url,
       deletePassword,
       planId,
       viewerId,
+      links,
+      link_type,
+      link_url,
     } = body;
 
     const selectedPlanId = String(planId || "normal_free_1d") as PlanId;
@@ -139,6 +147,30 @@ export async function POST(request: Request) {
       .slice(0, plan.descriptionMax);
 
     const finalDeletePassword = String(deletePassword || "").trim();
+
+    const rawLinks = Array.isArray(links)
+      ? links
+      : [
+          {
+            link_type,
+            link_url,
+          },
+        ];
+
+    const finalLinks = rawLinks
+      .map((link: any, index: number) => ({
+        link_type: String(link.link_type || "other").trim() || "other",
+        link_url: String(link.link_url || "").trim(),
+        sort_order: index,
+      }))
+      .filter((link: any) => link.link_url);
+
+    if (finalLinks.length > plan.linkMax) {
+      return NextResponse.json(
+        { error: `リンクは最大${plan.linkMax}個までです` },
+        { status: 400 }
+      );
+    }
 
     if (!finalTitle) {
       return NextResponse.json(
@@ -202,6 +234,8 @@ export async function POST(request: Request) {
       Date.now() + plan.rentalDays * 24 * 60 * 60 * 1000
     ).toISOString();
 
+    const firstLink = finalLinks[0];
+
     const { data: cell, error: cellError } = await supabaseAdmin
       .from("cells")
       .insert([
@@ -211,8 +245,8 @@ export async function POST(request: Request) {
           title: finalTitle,
           author: finalAuthor,
           description: finalDescription,
-          link_type,
-          link_url,
+          link_type: firstLink?.link_type || null,
+          link_url: firstLink?.link_url || null,
           image_url,
           original_image_url,
           expires_at: expiresAt,
@@ -232,6 +266,28 @@ export async function POST(request: Request) {
         { error: cellError.message },
         { status: 500 }
       );
+    }
+
+    if (finalLinks.length > 0) {
+      const { error: linkError } = await supabaseAdmin
+        .from("cell_links")
+        .insert(
+          finalLinks.map((link: any) => ({
+            cell_id: cell.id,
+            link_type: link.link_type,
+            link_url: link.link_url,
+            sort_order: link.sort_order,
+          }))
+        );
+
+      if (linkError) {
+        await supabaseAdmin.from("cells").delete().eq("id", cell.id);
+
+        return NextResponse.json(
+          { error: linkError.message },
+          { status: 500 }
+        );
+      }
     }
 
     if (finalDeletePassword) {
