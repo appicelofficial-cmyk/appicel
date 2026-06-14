@@ -6,6 +6,7 @@ import {
   FaInstagram,
   FaFacebook,
   FaTiktok,
+  FaTwitch,
   FaYoutube,
   FaLink
 } from "react-icons/fa6";
@@ -67,6 +68,7 @@ const LINK_TYPES = [
   { value: "instagram", label: "Instagram" },
   { value: "facebook", label: "Facebook" },
   { value: "tiktok", label: "TikTok" },
+  { value: "twitch", label: "Twitch" },
   { value: "line", label: "LINE" },
   { value: "youtube", label: "YouTube" },
   { value: "other", label: "Other" },
@@ -134,19 +136,28 @@ export default function Home() {
   function LinkIcon(type: string) {
     switch (type) {
       case "x":
-        return <FaXTwitter size={28} />;
+        return <FaXTwitter size={28} color="#ffffff" />;
+
       case "instagram":
-        return <FaInstagram size={28} />;
+        return <FaInstagram size={28} color="#E4405F" />;
+
       case "facebook":
-        return <FaFacebook size={28} />;
+        return <FaFacebook size={28} color="#1877F2" />;
+
       case "tiktok":
-        return <FaTiktok size={28} />;
+        return <FaTiktok size={28} color="#25F4EE" />;
+
+      case "twitch":
+        return <FaTwitch size={28} color="#9146FF" />;
+
       case "line":
-        return <SiLine size={28} />;
+        return <SiLine size={28} color="#06C755" />;
+
       case "youtube":
-        return <FaYoutube size={28} />;
+        return <FaYoutube size={28} color="#FF0000" />;
+
       default:
-        return <FaLink size={28} />;
+        return <FaLink size={28} color="#d4d4d8" />;
     }
   }
 
@@ -1257,6 +1268,7 @@ export default function Home() {
                     zoom={zoom}
                     minZoom={0.5}
                     maxZoom={4}
+                    zoomSpeed={0.15}
                     aspect={1}
                     restrictPosition={false}
                     objectFit="contain"
