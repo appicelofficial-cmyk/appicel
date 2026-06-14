@@ -105,6 +105,12 @@ export default function Home() {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [selectedCellImages, setSelectedCellImages] = useState<any[]>([]);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+  const imageDragRef = useRef({
+    startX: 0,
+    isDragging: false,
+  });
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
@@ -235,6 +241,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    setActiveImageIndex(0);
+
     if (!selectedCell?.id) {
       setComments([]);
       setSelectedCellLinks([]);
@@ -416,6 +424,71 @@ export default function Home() {
       .order("sort_order", { ascending: true });
 
     setSelectedCellImages(data || []);
+  }
+  
+  function getDetailImages() {
+    if (!selectedCell) return [];
+
+    if (selectedCellImages.length > 0) {
+      return selectedCellImages;
+    }
+
+    if (selectedCell.image_url) {
+      return [
+       {
+          image_url: selectedCell.image_url,
+          original_image_url:
+            selectedCell.original_image_url || selectedCell.image_url,
+        },
+      ];
+    }
+
+    return [];
+  }
+
+  function showPrevImage() {
+    const images = getDetailImages();
+
+    if (images.length <= 1) return;
+
+    setActiveImageIndex((prev) =>
+      prev === 0 ? images.length - 1 : prev - 1
+    );
+  }
+
+  function showNextImage() {
+    const images = getDetailImages();
+
+    if (images.length <= 1) return;
+
+    setActiveImageIndex((prev) =>
+      prev === images.length - 1 ? 0 : prev + 1
+    );
+  }
+
+  function handleImagePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    imageDragRef.current = {
+      startX: e.clientX,
+      isDragging: true,
+    };
+
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handleImagePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (!imageDragRef.current.isDragging) return;
+
+    const dx = e.clientX - imageDragRef.current.startX;
+
+    imageDragRef.current.isDragging = false;
+
+    if (Math.abs(dx) < 50) return;
+
+    if (dx < 0) {
+      showNextImage();
+    } else {
+      showPrevImage();
+    }
   }
   
   function updateLink(index: number, key: "link_type" | "link_url", value: string) {
@@ -1023,42 +1096,105 @@ export default function Home() {
               </p>
             )}
 
-            {(
-              selectedCellImages.length > 0
-                ? selectedCellImages
-                : selectedCell.image_url
-                  ? [
-                      {
-                        image_url: selectedCell.image_url,
-                        original_image_url:
-                          selectedCell.original_image_url || selectedCell.image_url,
-                      },
-                    ]
-                  : []
-            ).length > 0 && (
-              <div className="space-y-4 mb-6">
-                {(
-                  selectedCellImages.length > 0
-                    ? selectedCellImages
-                    : selectedCell.image_url
-                      ? [
-                          {
-                            image_url: selectedCell.image_url,
-                            original_image_url:
-                              selectedCell.original_image_url || selectedCell.image_url,
-                          },
-                        ]
-                      : []
-                ).map((image: any, index: number) => (
+            {getDetailImages().length > 0 && (
+              <div className="relative mb-6 select-none">
+                <div
+                  onPointerDown={handleImagePointerDown}
+                  onPointerUp={handleImagePointerUp}
+                  onPointerCancel={() => {
+                    imageDragRef.current.isDragging = false;
+                  }}
+                  className="relative cursor-grab active:cursor-grabbing touch-pan-y"
+                >
                   <img
-                    key={index}
-                    src={image.original_image_url || image.image_url}
-                    alt={`${selectedCell.title}-${index + 1}`}
+                    src={
+                      getDetailImages()[activeImageIndex]?.original_image_url ||
+                      getDetailImages()[activeImageIndex]?.image_url
+                    }
+                    alt={`${selectedCell.title}-${activeImageIndex + 1}`}
+                    draggable={false}
                     className="w-full max-h-[60vh] object-contain rounded-lg"
                   />
-                ))}
-              </div>
-            )}
+
+                  {getDetailImages().length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          showPrevImage();
+                        }}
+                        className="
+                        absolute
+                        left-2
+                        top-1/2
+                        -translate-y-1/2
+                        w-10
+                        h-10
+                        rounded-full
+                        bg-black/50
+                        hover:bg-black/70
+                        text-white
+                        text-3xl
+                        flex
+                        items-center
+                        justify-center
+                      "
+                    >
+                      ‹
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        showNextImage();
+                      }}
+                      className="
+                       absolute
+                       right-2
+                       top-1/2
+                       -translate-y-1/2
+                       w-10
+                       h-10
+                       rounded-full
+                       bg-black/50
+                       hover:bg-black/70
+                       text-white
+                       text-3xl
+                       flex
+                       items-center
+                       justify-center
+                     "
+                   >
+                     ›
+                   </button>
+
+                   <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1 rounded-full">
+                     {activeImageIndex + 1} / {getDetailImages().length}
+                   </div>
+                 </>
+               )}
+             </div>
+
+             {getDetailImages().length > 1 && (
+               <div className="flex justify-center gap-2 mt-3">
+                 {getDetailImages().map((_, index) => (
+                   <button
+                     key={index}
+                     type="button"
+                     onClick={() => setActiveImageIndex(index)}
+                     className={`w-2 h-2 rounded-full ${
+                       index === activeImageIndex
+                         ? "bg-white"
+                         : "bg-gray-600"
+                     }`}
+                   />
+                 ))}
+               </div>
+             )}
+           </div>
+         )}
 
             {(
               selectedCellLinks.length > 0
