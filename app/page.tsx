@@ -659,8 +659,20 @@ export default function Home() {
       return;
     }
 
-    if (!imageFile || !imagePreview || !croppedAreaPixels) {
+    const currentPlan = PLANS[selectedPlanId as keyof typeof PLANS];
+
+    if (selectedPlanId !== "normal_free_1d") {
+      alert("有料プランはStripe決済実装後に利用できます");
+      return;
+    }
+
+    if (imageFiles.length === 0 || !imagePreviews[0] || !croppedAreaPixels) {
       alert("画像を選択してください");
+      return;
+    }
+
+    if (imageFiles.length > currentPlan.imageMax) {
+      alert(`画像は最大${currentPlan.imageMax}枚までです`);
       return;
     }
 
@@ -1366,6 +1378,33 @@ export default function Home() {
                     {index === 0 && "（セル表示用）"}
                   </p>
                 ))}
+              </div>
+            )}
+            
+            {imagePreviews[0] && (
+              <div className="mb-4">
+                <p className="text-xs text-gray-400 mb-2">
+                  1枚目をセル表示用にトリミングしてください
+                </p>
+
+                <div className="h-[300px] relative mb-3 bg-black rounded overflow-hidden">
+                  <Cropper
+                    image={imagePreviews[0]}
+                    crop={crop}
+                    zoom={zoom}
+                    minZoom={0.5}
+                    maxZoom={4}
+                    zoomSpeed={0.15}
+                    aspect={1}
+                    restrictPosition={false}
+                    objectFit="contain"
+                    onCropChange={setCrop}
+                    onZoomChange={setZoom}
+                    onCropComplete={(_, pixels) =>
+                      setCroppedAreaPixels(pixels)
+                    }
+                  />
+                </div>
               </div>
             )}
 
