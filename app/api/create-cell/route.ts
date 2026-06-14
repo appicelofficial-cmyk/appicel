@@ -2,10 +2,98 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHash, randomBytes } from "crypto";
 
+const PLANS = {
+  normal_free_1d: {
+    label: "リリース記念：通常1日無料",
+    priceYen: 0,
+    rentalDays: 1,
+    isPremium: false,
+    descriptionMax: 200,
+  },
+  normal_1d: {
+    label: "通常1日",
+    priceYen: 100,
+    rentalDays: 1,
+    isPremium: false,
+    descriptionMax: 200,
+  },
+  normal_7d: {
+    label: "通常7日",
+    priceYen: 600,
+    rentalDays: 7,
+    isPremium: false,
+    descriptionMax: 200,
+  },
+  normal_30d: {
+    label: "通常30日",
+    priceYen: 2500,
+    rentalDays: 30,
+    isPremium: false,
+    descriptionMax: 200,
+  },
+  premium_1d: {
+    label: "プレミアム1日",
+    priceYen: 250,
+    rentalDays: 1,
+    isPremium: true,
+    descriptionMax: 500,
+  },
+  premium_7d: {
+    label: "プレミアム7日",
+    priceYen: 1500,
+    rentalDays: 7,
+    isPremium: true,
+    descriptionMax: 500,
+  },
+  premium_30d: {
+    label: "プレミアム30日",
+    priceYen: 6000,
+    rentalDays: 30,
+    isPremium: true,
+    descriptionMax: 500,
+  },
+} as const;
+
+type PlanId = keyof typeof PLANS;
+
 function hashPassword(password: string, salt: string) {
   return createHash("sha256")
     .update(`${salt}:${password}`)
     .digest("hex");
+}
+
+function hashIp(request: Request) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const realIp = request.headers.get("x-real-ip");
+
+  const ip =
+    forwardedFor?.split(",")[0]?.trim() ||
+    realIp?.trim() ||
+    "unknown";
+
+  return createHash("sha256").update(ip).digest("hex");
+}
+
+async function countFreePosts(
+  supabaseAdmin: any,
+  viewerId: string,
+  ipHash: string
+) {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { count: viewerCount } = await supabaseAdmin
+    .from("free_cell_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("viewer_id", viewerId)
+    .gte("created_at", since);
+
+  const { count: ipCount } = await supabaseAdmin
+    .from("free_cell_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("ip_hash", ipHash)
+    .gte("created_at", since);
+
+  return Math.max(viewerCount || 0, ipCount || 0);
 }
 
 export async function POST(request: Request) {
@@ -23,11 +111,33 @@ export async function POST(request: Request) {
       image_url,
       original_image_url,
       deletePassword,
+      planId,
+      viewerId,
     } = body;
+
+    const selectedPlanId = String(planId || "normal_free_1d") as PlanId;
+    const plan = PLANS[selectedPlanId];
+
+    if (!plan) {
+      return NextResponse.json(
+        { error: "プランが正しくありません" },
+        { status: 400 }
+      );
+    }
+
+    if (plan.priceYen > 0) {
+      return NextResponse.json(
+        { error: "有料プランはStripe決済実装後に利用できます" },
+        { status: 400 }
+      );
+    }
 
     const finalTitle = String(title || "").trim().slice(0, 15);
     const finalAuthor = String(author || "").trim().slice(0, 10) || "名無し";
-    const finalDescription = String(description || "").trim().slice(0, 200);
+    const finalDescription = String(description || "")
+      .trim()
+      .slice(0, plan.descriptionMax);
+
     const finalDeletePassword = String(deletePassword || "").trim();
 
     if (!finalTitle) {
@@ -63,7 +173,34 @@ export async function POST(request: Request) {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const ipHash = hashIp(request);
+    const finalViewerId = String(viewerId || "").trim();
+
+    if (selectedPlanId === "normal_free_1d") {
+      if (!finalViewerId) {
+        return NextResponse.json(
+          { error: "viewer_id がありません" },
+          { status: 400 }
+        );
+      }
+
+      const freePostCount = await countFreePosts(
+        supabaseAdmin,
+        finalViewerId,
+        ipHash
+      );
+
+      if (freePostCount >= 3) {
+        return NextResponse.json(
+          { error: "無料通常1日セルは1人1日3回までです" },
+          { status: 429 }
+        );
+      }
+    }
+
+    const expiresAt = new Date(
+      Date.now() + plan.rentalDays * 24 * 60 * 60 * 1000
+    ).toISOString();
 
     const { data: cell, error: cellError } = await supabaseAdmin
       .from("cells")
@@ -80,6 +217,11 @@ export async function POST(request: Request) {
           original_image_url,
           expires_at: expiresAt,
           has_delete_password: Boolean(finalDeletePassword),
+          plan_id: selectedPlanId,
+          is_premium: plan.isPremium,
+          price_yen: plan.priceYen,
+          rental_days: plan.rentalDays,
+          viewer_id: finalViewerId,
         },
       ])
       .select("id")
@@ -111,6 +253,27 @@ export async function POST(request: Request) {
 
         return NextResponse.json(
           { error: passwordError.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    if (selectedPlanId === "normal_free_1d") {
+      const { error: freePostError } = await supabaseAdmin
+        .from("free_cell_posts")
+        .insert([
+          {
+            viewer_id: finalViewerId,
+            ip_hash: ipHash,
+            cell_id: cell.id,
+          },
+        ]);
+
+      if (freePostError) {
+        await supabaseAdmin.from("cells").delete().eq("id", cell.id);
+
+        return NextResponse.json(
+          { error: freePostError.message },
           { status: 500 }
         );
       }
