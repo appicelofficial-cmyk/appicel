@@ -10,6 +10,7 @@ const PLANS = {
     isPremium: false,
     descriptionMax: 200,
     linkMax: 2,
+    imageMax: 2,
   },
   normal_1d: {
     label: "通常1日",
@@ -18,6 +19,7 @@ const PLANS = {
     isPremium: false,
     descriptionMax: 200,
     linkMax: 2,
+    imageMax: 2,
   },
   normal_7d: {
     label: "通常7日",
@@ -26,6 +28,7 @@ const PLANS = {
     isPremium: false,
     descriptionMax: 200,
     linkMax: 2,
+    imageMax: 2,
   },
   normal_30d: {
     label: "通常30日",
@@ -34,6 +37,7 @@ const PLANS = {
     isPremium: false,
     descriptionMax: 200,
     linkMax: 2,
+    imageMax: 2,
   },
   premium_1d: {
     label: "プレミアム1日",
@@ -42,6 +46,7 @@ const PLANS = {
     isPremium: true,
     descriptionMax: 500,
     linkMax: 5,
+    imageMax: 5,
   },
   premium_7d: {
     label: "プレミアム7日",
@@ -50,6 +55,7 @@ const PLANS = {
     isPremium: true,
     descriptionMax: 500,
     linkMax: 5,
+    imageMax: 5,
   },
   premium_30d: {
     label: "プレミアム30日",
@@ -58,6 +64,7 @@ const PLANS = {
     isPremium: true,
     descriptionMax: 500,
     linkMax: 5,
+    imageMax: 5,
   },
 } as const;
 
@@ -113,14 +120,15 @@ export async function POST(request: Request) {
       title,
       author,
       description,
-      image_url,
-      original_image_url,
       deletePassword,
       planId,
       viewerId,
       links,
       link_type,
       link_url,
+      images,
+      image_url,
+      original_image_url,
     } = body;
 
     const selectedPlanId = String(planId || "normal_free_1d") as PlanId;
@@ -172,16 +180,42 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!finalTitle) {
+    const rawImages = Array.isArray(images)
+      ? images
+      : [
+          {
+            image_url,
+            original_image_url,
+          },
+        ];
+
+    const finalImages = rawImages
+      .map((image: any, index: number) => ({
+        image_url: String(image.image_url || "").trim(),
+        original_image_url: String(
+          image.original_image_url || image.image_url || ""
+        ).trim(),
+        sort_order: index,
+      }))
+      .filter((image: any) => image.image_url && image.original_image_url);
+
+    if (finalImages.length === 0) {
       return NextResponse.json(
-        { error: "タイトルを入力してください" },
+        { error: "画像を選択してください" },
         { status: 400 }
       );
     }
 
-    if (!image_url) {
+    if (finalImages.length > plan.imageMax) {
       return NextResponse.json(
-        { error: "画像を選択してください" },
+        { error: `画像は最大${plan.imageMax}枚までです` },
+        { status: 400 }
+      );
+    }
+
+    if (!finalTitle) {
+      return NextResponse.json(
+        { error: "タイトルを入力してください" },
         { status: 400 }
       );
     }
@@ -235,6 +269,7 @@ export async function POST(request: Request) {
     ).toISOString();
 
     const firstLink = finalLinks[0];
+    const firstImage = finalImages[0];
 
     const { data: cell, error: cellError } = await supabaseAdmin
       .from("cells")
@@ -247,8 +282,8 @@ export async function POST(request: Request) {
           description: finalDescription,
           link_type: firstLink?.link_type || null,
           link_url: firstLink?.link_url || null,
-          image_url,
-          original_image_url,
+          image_url: firstImage.image_url,
+          original_image_url: firstImage.original_image_url,
           expires_at: expiresAt,
           has_delete_password: Boolean(finalDeletePassword),
           plan_id: selectedPlanId,
@@ -264,6 +299,26 @@ export async function POST(request: Request) {
     if (cellError) {
       return NextResponse.json(
         { error: cellError.message },
+        { status: 500 }
+      );
+    }
+
+    const { error: imageError } = await supabaseAdmin
+      .from("cell_images")
+      .insert(
+        finalImages.map((image: any) => ({
+          cell_id: cell.id,
+          image_url: image.image_url,
+          original_image_url: image.original_image_url,
+          sort_order: image.sort_order,
+        }))
+      );
+
+    if (imageError) {
+      await supabaseAdmin.from("cells").delete().eq("id", cell.id);
+
+      return NextResponse.json(
+        { error: imageError.message },
         { status: 500 }
       );
     }

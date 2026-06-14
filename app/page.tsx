@@ -24,42 +24,49 @@ const PLANS = {
     priceText: "無料",
     descriptionMax: 200,
     linkMax: 2,
+    imageMax: 2,
   },
   normal_1d: {
     label: "通常1日",
     priceText: "100円",
     descriptionMax: 200,
     linkMax: 2,
+    imageMax: 2,
   },
   normal_7d: {
     label: "通常7日",
     priceText: "600円",
     descriptionMax: 200,
     linkMax: 2,
+    imageMax: 2,
   },
   normal_30d: {
     label: "通常30日",
     priceText: "2,500円",
     descriptionMax: 200,
     linkMax: 2,
+    imageMax: 2,
   },
   premium_1d: {
     label: "プレミアム1日",
     priceText: "250円",
     descriptionMax: 500,
     linkMax: 5,
+    imageMax: 5,
   },
   premium_7d: {
     label: "プレミアム7日",
     priceText: "1,500円",
     descriptionMax: 500,
     linkMax: 5,
+    imageMax: 5,
   },
   premium_30d: {
     label: "プレミアム30日",
     priceText: "6,000円",
     descriptionMax: 500,
     linkMax: 5,
+    imageMax: 5,
   },
 } as const;
 
@@ -95,8 +102,9 @@ export default function Home() {
   const [selectedPlanId, setSelectedPlanId] = useState("normal_free_1d");
   const [deletePassword, setDeletePassword] = useState("");
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState("");
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [selectedCellImages, setSelectedCellImages] = useState<any[]>([]);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
@@ -230,11 +238,13 @@ export default function Home() {
     if (!selectedCell?.id) {
       setComments([]);
       setSelectedCellLinks([]);
+      setSelectedCellImages([]);
       return;
     }
 
     fetchComments(selectedCell.id);
     fetchCellLinks(selectedCell.id);
+    fetchCellImages(selectedCell.id);
   }, [selectedCell?.id]);
   
   useEffect(() => {
@@ -398,6 +408,16 @@ export default function Home() {
     setSelectedCellLinks(data || []);
   }
 
+  async function fetchCellImages(cellId: string) {
+    const { data } = await supabase
+      .from("cell_images")
+      .select("*")
+      .eq("cell_id", cellId)
+      .order("sort_order", { ascending: true });
+
+    setSelectedCellImages(data || []);
+  }
+  
   function updateLink(index: number, key: "link_type" | "link_url", value: string) {
     setLinks((prev) => {
       const next = [...prev];
@@ -412,10 +432,20 @@ export default function Home() {
   function addLinkInput() {
     const currentPlan = PLANS[selectedPlanId as keyof typeof PLANS];
 
-    if (links.length >= currentPlan.linkMax) {
-      alert(`リンクは最大${currentPlan.linkMax}個までです`);
-      return;
-    }
+    if (selectedPlanId !== "normal_free_1d") {
+    alert("有料プランはStripe決済実装後に利用できます");
+    return;
+  }
+
+  if (imageFiles.length === 0 || !imagePreviews[0] || !croppedAreaPixels) {
+    alert("画像を選択してください");
+    return;
+  }
+
+  if (imageFiles.length > currentPlan.imageMax) {
+    alert(`画像は最大${currentPlan.imageMax}枚までです`);
+    return;
+  }
 
     setLinks((prev) => [
       ...prev,
@@ -634,14 +664,16 @@ export default function Home() {
       return;
     }
 
-    let imageUrl = null;
-    let originalImageUrlState = null;
+    const uploadedImages: any[] = [];
 
-    const originalFileName = `${Date.now()}-original-${imageFile.name}`;
+    const firstFile = imageFiles[0];
+    const firstPreview = imagePreviews[0];
+
+    const originalFileName = `${Date.now()}-original-0-${firstFile.name}`;
 
     const { error: originalError } = await supabase.storage
       .from("cell-images")
-      .upload(originalFileName, imageFile);
+      .upload(originalFileName, firstFile);
 
     if (originalError) {
       console.error(originalError);
@@ -653,18 +685,18 @@ export default function Home() {
       .from("cell-images")
       .getPublicUrl(originalFileName);
 
-    originalImageUrlState = originalData.publicUrl;
+    const originalImageUrlState = originalData.publicUrl;
 
     const croppedBlob = await getCroppedImage(
-      imagePreview,
+      firstPreview,
       croppedAreaPixels
     );
 
-    const croppedFileName = `${Date.now()}-cropped.jpg`;
+    const croppedFileName = `${Date.now()}-cropped-0.jpg`;
 
     const { error: croppedError } = await supabase.storage
       .from("cell-images")
-      .upload(croppedFileName, croppedBlob);
+     .upload(croppedFileName, croppedBlob);
 
     if (croppedError) {
       console.error(croppedError);
@@ -676,7 +708,38 @@ export default function Home() {
       .from("cell-images")
       .getPublicUrl(croppedFileName);
 
-    imageUrl = croppedData.publicUrl;
+    const imageUrl = croppedData.publicUrl;
+
+    uploadedImages.push({
+      image_url: imageUrl,
+      original_image_url: originalImageUrlState,
+      sort_order: 0,
+    });
+
+    for (let i = 1; i < imageFiles.length; i++) {
+      const file = imageFiles[i];
+      const fileName = `${Date.now()}-original-${i}-${file.name}`;
+
+      const { error } = await supabase.storage
+        .from("cell-images")
+        .upload(fileName, file);
+
+      if (error) {
+        console.error(error);
+        alert(error.message);
+        return;
+      }
+
+      const { data } = supabase.storage
+        .from("cell-images")
+        .getPublicUrl(fileName);
+
+      uploadedImages.push({
+        image_url: data.publicUrl,
+        original_image_url: data.publicUrl,
+        sort_order: i,
+      });
+    }
 
     const response = await fetch("/api/create-cell", {
       method: "POST",
@@ -689,21 +752,22 @@ export default function Home() {
         title: finalTitle,
         author: finalAuthor,
         description: finalDescription,
-        link_type: linkType,
-        link_url: linkUrl,
-        image_url: imageUrl,
-        original_image_url: originalImageUrlState,
+        link_type: links[0]?.link_type || "other",
+        link_url: links[0]?.link_url?.trim() || "",
+        image_url: uploadedImages[0].image_url,
+        original_image_url: uploadedImages[0].original_image_url,
+        images: uploadedImages,
         deletePassword: deletePassword.trim(),
         planId: selectedPlanId,
         viewerId: getViewerId(),
         links: links
           .map((link, index) => ({
-           link_type: link.link_type,
-           link_url: link.link_url.trim(),
-           sort_order: index,
-         }))
-         .filter((link) => link.link_url),
-     }),
+            link_type: link.link_type,
+            link_url: link.link_url.trim(),
+            sort_order: index,
+          }))
+          .filter((link) => link.link_url),
+      }),
     });
 
     const result = await response.json();
@@ -721,8 +785,8 @@ export default function Home() {
     setDescription("");
     setDeletePassword("");
     setSelectedPlanId("normal_free_1d");
-    setImageFile(null);
-    setImagePreview("");
+    setImageFiles([]);
+    setImagePreviews([]);
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCroppedAreaPixels(null);
@@ -919,6 +983,7 @@ export default function Home() {
               onClick={() => {
                 setSelectedCell(null);
                 setSelectedCellLinks([]);
+                setSelectedCellImages([]);
                 setComments([]);
                 setCommentAuthor("");
                 setCommentBody("");
@@ -946,12 +1011,41 @@ export default function Home() {
               </p>
             )}
 
-            {selectedCell.image_url && (
-              <img
-                src={selectedCell.original_image_url || selectedCell.image_url}
-                alt={selectedCell.title}
-                className="w-full max-h-[60vh] object-contain rounded-lg mb-6"
-              />
+            {(
+              selectedCellImages.length > 0
+                ? selectedCellImages
+                : selectedCell.image_url
+                  ? [
+                      {
+                        image_url: selectedCell.image_url,
+                        original_image_url:
+                          selectedCell.original_image_url || selectedCell.image_url,
+                      },
+                    ]
+                  : []
+            ).length > 0 && (
+              <div className="space-y-4 mb-6">
+                {(
+                  selectedCellImages.length > 0
+                    ? selectedCellImages
+                    : selectedCell.image_url
+                      ? [
+                          {
+                            image_url: selectedCell.image_url,
+                            original_image_url:
+                              selectedCell.original_image_url || selectedCell.image_url,
+                          },
+                        ]
+                      : []
+                ).map((image: any, index: number) => (
+                  <img
+                    key={index}
+                    src={image.original_image_url || image.image_url}
+                    alt={`${selectedCell.title}-${index + 1}`}
+                    className="w-full max-h-[60vh] object-contain rounded-lg"
+                  />
+                ))}
+              </div>
             )}
 
             {(
@@ -1093,8 +1187,8 @@ export default function Home() {
                 setDescription("");
                 setDeletePassword("");
                 setSelectedPlanId("normal_free_1d");
-                setImageFile(null);
-                setImagePreview("");
+                setImageFiles([]);
+                setImagePreviews([]);
                 setCrop({ x: 0, y: 0 });
                 setZoom(1);
                 setCroppedAreaPixels(null);
@@ -1119,6 +1213,8 @@ export default function Home() {
                 setSelectedPlanId(nextPlanId);
                 setDescription((prev) => prev.slice(0, nextPlan.descriptionMax));
                 setLinks((prev) => prev.slice(0, nextPlan.linkMax));
+                setImageFiles((prev) => prev.slice(0, nextPlan.imageMax));
+                setImagePreviews((prev) => prev.slice(0, nextPlan.imageMax));
               }}
               className="w-full p-2 mb-2 bg-zinc-800 text-white rounded"
             >
@@ -1232,19 +1328,28 @@ export default function Home() {
 
             <label className="block w-full mb-4 cursor-pointer">
               <div className="bg-blue-600 hover:bg-blue-500 text-white text-center py-3 rounded font-bold">
-                画像を選択
+                画像を選択（最大{PLANS[selectedPlanId as keyof typeof PLANS].imageMax}枚）
               </div>
 
               <input
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
+                  const files = Array.from(e.target.files || []);
+                  const currentPlan = PLANS[selectedPlanId as keyof typeof PLANS];
 
-                  if (!file) return;
+                  if (files.length === 0) return;
 
-                  setImageFile(file);
-                  setImagePreview(URL.createObjectURL(file));
+                  if (files.length > currentPlan.imageMax) {
+                    alert(`画像は最大${currentPlan.imageMax}枚までです`);
+                    return;
+                  }
+
+                  imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+
+                  setImageFiles(files);
+                  setImagePreviews(files.map((file) => URL.createObjectURL(file)));
                   setCrop({ x: 0, y: 0 });
                   setZoom(1);
                   setCroppedAreaPixels(null);
@@ -1253,32 +1358,14 @@ export default function Home() {
               />
             </label>
 
-            {imageFile && (
-              <p className="text-sm text-gray-400 mb-4">
-                選択中：{imageFile.name}
-              </p>
-            )}
-
-            {imagePreview && (
-              <div className="mb-4">
-                <div className="h-[300px] relative mb-3 bg-black rounded overflow-hidden">
-                  <Cropper
-                    image={imagePreview}
-                    crop={crop}
-                    zoom={zoom}
-                    minZoom={0.5}
-                    maxZoom={4}
-                    zoomSpeed={0.15}
-                    aspect={1}
-                    restrictPosition={false}
-                    objectFit="contain"
-                    onCropChange={setCrop}
-                    onZoomChange={setZoom}
-                    onCropComplete={(_, pixels) =>
-                      setCroppedAreaPixels(pixels)
-                    }
-                  />
-                </div>
+            {imageFiles.length > 0 && (
+              <div className="text-sm text-gray-400 mb-4 space-y-1">
+                {imageFiles.map((file, index) => (
+                  <p key={index}>
+                    {index + 1}枚目：{file.name}
+                    {index === 0 && "（セル表示用）"}
+                  </p>
+                ))}
               </div>
             )}
 
