@@ -17,6 +17,44 @@ const GRID_SIZE = 32;
 const CELL_SIZE = 24;
 const GAP_SIZE = 2;
 
+const PLANS = {
+  normal_free_1d: {
+    label: "リリース記念：通常1日無料",
+    priceText: "無料",
+    descriptionMax: 200,
+  },
+  normal_1d: {
+    label: "通常1日",
+    priceText: "100円",
+    descriptionMax: 200,
+  },
+  normal_7d: {
+    label: "通常7日",
+    priceText: "600円",
+    descriptionMax: 200,
+  },
+  normal_30d: {
+    label: "通常30日",
+    priceText: "2,500円",
+    descriptionMax: 200,
+  },
+  premium_1d: {
+    label: "プレミアム1日",
+    priceText: "250円",
+    descriptionMax: 500,
+  },
+  premium_7d: {
+    label: "プレミアム7日",
+    priceText: "1,500円",
+    descriptionMax: 500,
+  },
+  premium_30d: {
+    label: "プレミアム30日",
+    priceText: "6,000円",
+    descriptionMax: 500,
+  },
+} as const;
+
 export default function Home() {
   const [cells, setCells] = useState<any[]>([]);
   const [selectedCell, setSelectedCell] = useState<any | null>(null);
@@ -27,6 +65,7 @@ export default function Home() {
   const [linkType, setLinkType] = useState("other");
   const [linkUrl, setLinkUrl] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedPlanId, setSelectedPlanId] = useState("normal_free_1d");
   const [deletePassword, setDeletePassword] = useState("");
 
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -560,6 +599,8 @@ export default function Home() {
         image_url: imageUrl,
         original_image_url: originalImageUrlState,
         deletePassword: deletePassword.trim(),
+        planId: selectedPlanId,
+        viewerId: getViewerId(),
       }),
     });
 
@@ -577,6 +618,7 @@ export default function Home() {
     setLinkUrl("");
     setDescription("");
     setDeletePassword("");
+    setSelectedPlanId("normal_free_1d");
     setImageFile(null);
     setImagePreview("");
     setCrop({ x: 0, y: 0 });
@@ -915,6 +957,7 @@ export default function Home() {
                 setLinkUrl("");
                 setDescription("");
                 setDeletePassword("");
+                setSelectedPlanId("normal_free_1d");
                 setImageFile(null);
                 setImagePreview("");
                 setCrop({ x: 0, y: 0 });
@@ -932,6 +975,22 @@ export default function Home() {
 
             <h2 className="text-xl mb-4">新規投稿</h2>
 
+            <select
+              value={selectedPlanId}
+              onChange={(e) => setSelectedPlanId(e.target.value)}
+              className="w-full p-2 mb-2 bg-zinc-800 text-white rounded"
+            >
+              {Object.entries(PLANS).map(([id, plan]) => (
+                <option key={id} value={id}>
+                  {plan.label} / {plan.priceText}
+                </option>
+              ))}
+            </select>
+
+            <p className="text-[11px] text-gray-500 mb-3">
+              現在は「リリース記念：通常1日無料」のみ投稿できます。有料プランはStripe決済実装後に有効化します。
+            </p>
+            
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -972,8 +1031,12 @@ export default function Home() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              maxLength={200}
-              placeholder="本文（200文字まで）"
+              maxLength={
+                PLANS[selectedPlanId as keyof typeof PLANS].descriptionMax
+              }
+              placeholder={`本文（${
+                PLANS[selectedPlanId as keyof typeof PLANS].descriptionMax
+              }文字まで）`}
               className="w-full p-2 mb-3 bg-zinc-800 text-white placeholder-gray-400 rounded"
             />
 
