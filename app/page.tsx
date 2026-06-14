@@ -293,10 +293,14 @@ export default function Home() {
 
     if (diff <= 0) return "期限切れ";
 
-    const minutes = Math.floor(diff / 1000 / 60);
-    const seconds = Math.floor((diff / 1000) % 60);
+    const totalSeconds = Math.floor(diff / 1000);
 
-    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+  
+    return `${days}d ${hours}h ${minutes}m ${String(seconds).padStart(2, "0")}s`;
   }
 
   async function fetchPvRanking() {
@@ -820,7 +824,7 @@ export default function Home() {
                 setCommentAuthor("");
                 setCommentBody("");
               }}
-              className="absolute top-3 right-4 text-2xl text-gray-400 hover:text-white"
+              className="absolute top-5 right-4 text-3xl leading-none text-gray-400 hover:text-white"
             >
               ×
             </button>
