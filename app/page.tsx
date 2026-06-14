@@ -968,7 +968,7 @@ export default function Home() {
                 setZoom(1);
                 setCroppedAreaPixels(null);
               }}
-              className="absolute top-3 right-4 text-2xl text-gray-400 hover:text-white"
+              className="absolute top-5 right-4 text-3xl leading-none text-gray-400 hover:text-white"
             >
               ×
             </button>
