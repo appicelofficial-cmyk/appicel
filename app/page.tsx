@@ -923,7 +923,7 @@ export default function Home() {
                 setCommentAuthor("");
                 setCommentBody("");
               }}
-              className="absolute top-5 right-4 text-3xl leading-none text-gray-400 hover:text-white"
+              className="absolute top-3 right-3 z-50 w-10 h-10 flex items-center justify-center text-3xl leading-none text-gray-400 hover:text-white rounded-full cursor-pointer"
             >
               ×
             </button>
@@ -1099,7 +1099,7 @@ export default function Home() {
                 setZoom(1);
                 setCroppedAreaPixels(null);
               }}
-              className="absolute top-5 right-4 text-3xl leading-none text-gray-400 hover:text-white"
+              className="absolute top-3 right-3 z-50 w-10 h-10 flex items-center justify-center text-3xl leading-none text-gray-400 hover:text-white rounded-full cursor-pointer"
             >
               ×
             </button>
