@@ -106,10 +106,14 @@ export default function Home() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [selectedCellImages, setSelectedCellImages] = useState<any[]>([]);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [imageDragOffset, setImageDragOffset] = useState(0);
+  const [isImageDragging, setIsImageDragging] = useState(false);
+  const [isImageNavVisible, setIsImageNavVisible] = useState(false);
 
   const imageDragRef = useRef({
     startX: 0,
     isDragging: false,
+    moved: false,
   });
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -454,6 +458,9 @@ export default function Home() {
     setActiveImageIndex((prev) =>
       prev === 0 ? images.length - 1 : prev - 1
     );
+
+    setImageDragOffset(0);
+    setIsImageNavVisible(true);
   }
 
   function showNextImage() {
@@ -464,30 +471,66 @@ export default function Home() {
     setActiveImageIndex((prev) =>
       prev === images.length - 1 ? 0 : prev + 1
     );
+
+    setImageDragOffset(0);
+    setIsImageNavVisible(true);
   }
 
   function handleImagePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    const target = e.target as HTMLElement;
+
+    if (target.closest("button")) return;
+
     imageDragRef.current = {
       startX: e.clientX,
       isDragging: true,
+      moved: false,
     };
 
+    setIsImageDragging(true);
+    setImageDragOffset(0);
+
     e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handleImagePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!imageDragRef.current.isDragging) return;
+
+    const dx = e.clientX - imageDragRef.current.startX;
+
+    if (Math.abs(dx) > 5) {
+     imageDragRef.current.moved = true;
+    }
+
+    setImageDragOffset(dx);
   }
 
   function handleImagePointerUp(e: React.PointerEvent<HTMLDivElement>) {
     if (!imageDragRef.current.isDragging) return;
 
     const dx = e.clientX - imageDragRef.current.startX;
+    const moved = imageDragRef.current.moved;
 
     imageDragRef.current.isDragging = false;
+    setIsImageDragging(false);
+    setImageDragOffset(0);
 
-    if (Math.abs(dx) < 50) return;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
 
-    if (dx < 0) {
-      showNextImage();
-    } else {
-      showPrevImage();
+    if (Math.abs(dx) > 70) {
+      if (dx < 0) {
+        showNextImage();
+      } else {
+        showPrevImage();
+      }
+
+      return;
+    }
+
+    if (!moved) {
+      setIsImageNavVisible((prev) => !prev);
     }
   }
   
@@ -1097,60 +1140,83 @@ export default function Home() {
             )}
 
             {getDetailImages().length > 0 && (
-              <div className="relative mb-6 select-none">
+              <div className="relative mb-6 select-none group">
                 <div
                   onPointerDown={handleImagePointerDown}
+                  onPointerMove={handleImagePointerMove}
                   onPointerUp={handleImagePointerUp}
                   onPointerCancel={() => {
                     imageDragRef.current.isDragging = false;
+                    setIsImageDragging(false);
+                    setImageDragOffset(0);
                   }}
-                  className="relative cursor-grab active:cursor-grabbing touch-pan-y"
+                  className="relative overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y rounded-lg"
                 >
-                  <img
-                    src={
-                      getDetailImages()[activeImageIndex]?.original_image_url ||
-                      getDetailImages()[activeImageIndex]?.image_url
-                    }
-                    alt={`${selectedCell.title}-${activeImageIndex + 1}`}
-                    draggable={false}
-                    className="w-full max-h-[60vh] object-contain rounded-lg"
-                  />
+                  <div
+                    className="flex"
+                    style={{
+                      transform: `translateX(calc(${-activeImageIndex * 100}% + ${imageDragOffset}px))`,
+                      transition: isImageDragging ? "none" : "transform 220ms ease",
+                    }}
+                  >
+                    {getDetailImages().map((image: any, index: number) => (
+                      <div
+                        key={index}
+                        className="w-full shrink-0 flex items-center justify-center"
+                      >
+                        <img
+                          src={image.original_image_url || image.image_url}
+                          alt={`${selectedCell.title}-${index + 1}`}
+                          draggable={false}
+                          className="w-full max-h-[60vh] object-contain rounded-lg"
+                        />
+                      </div>
+                    ))}
+                  </div>
 
                   {getDetailImages().length > 1 && (
                     <>
                       <button
                         type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
                         onClick={(e) => {
                           e.stopPropagation();
                           showPrevImage();
                         }}
-                        className="
-                        absolute
-                        left-2
-                        top-1/2
-                        -translate-y-1/2
-                        w-10
-                        h-10
-                        rounded-full
-                        bg-black/50
-                        hover:bg-black/70
-                        text-white
-                        text-3xl
-                        flex
-                        items-center
-                        justify-center
-                      "
-                    >
-                      ‹
-                    </button>
+                        className={`
+                          absolute
+                          left-2
+                          top-1/2
+                          -translate-y-1/2
+                          w-10
+                          h-10
+                          rounded-full
+                          bg-black/50
+                          hover:bg-black/70
+                          text-white
+                          text-3xl
+                          flex
+                          items-center
+                          justify-center
+                          transition-opacity
+                          ${isImageNavVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}
+                          md:opacity-0
+                          md:pointer-events-none
+                          md:group-hover:opacity-100
+                          md:group-hover:pointer-events-auto
+                        `}
+                      >
+                        ‹
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        showNextImage();
-                      }}
-                      className="
+                     <button
+                       type="button"
+                       onPointerDown={(e) => e.stopPropagation()}
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         showNextImage();
+                       }}
+                       className={`
                        absolute
                        right-2
                        top-1/2
@@ -1165,14 +1231,16 @@ export default function Home() {
                        flex
                        items-center
                        justify-center
-                     "
+                       transition-opacity
+                       ${isImageNavVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}
+                       md:opacity-0
+                       md:pointer-events-none
+                       md:group-hover:opacity-100
+                       md:group-hover:pointer-events-auto
+                     `}
                    >
                      ›
                    </button>
-
-                   <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1 rounded-full">
-                     {activeImageIndex + 1} / {getDetailImages().length}
-                   </div>
                  </>
                )}
              </div>
