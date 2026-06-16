@@ -112,6 +112,17 @@ export default function Home() {
   const [isSlideAnimating, setIsSlideAnimating] = useState(false);
   const [isImageNavVisible, setIsImageNavVisible] = useState(false);
   const [detailImageZoom, setDetailImageZoom] = useState(1);
+  const [detailImagePan, setDetailImagePan] = useState({ x: 0, y: 0 });
+
+  const detailImageAreaRef = useRef<HTMLDivElement | null>(null);
+
+  const detailImagePanRef = useRef({
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastY: 0,
+    isPanning: false,
+  });
   const detailImagePinchRef = useRef({
     distance: 0,
     zoom: 1,
@@ -477,12 +488,33 @@ export default function Home() {
   
   function resetDetailImageZoom() {
     setDetailImageZoom(1);
+    resetDetailImagePan();
   }
 
   function clampDetailZoom(nextZoom: number) {
     return Math.min(Math.max(nextZoom, 1), 4);
   }
 
+  function clampDetailPan(nextX: number, nextY: number, zoom = detailImageZoom) {
+    if (!detailImageAreaRef.current || zoom <= 1) {
+      return { x: 0, y: 0 };
+    }
+
+    const rect = detailImageAreaRef.current.getBoundingClientRect();
+
+    const maxX = (rect.width * (zoom - 1)) / 2;
+    const maxY = (rect.height * (zoom - 1)) / 2;
+
+    return {
+      x: Math.min(Math.max(nextX, -maxX), maxX),
+      y: Math.min(Math.max(nextY, -maxY), maxY),
+    };
+  }
+
+  function resetDetailImagePan() {
+    setDetailImagePan({ x: 0, y: 0 });
+  }
+  
   function getDetailTouchDistance(touches: React.TouchList) {
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
@@ -499,6 +531,15 @@ export default function Home() {
     );
 
     setDetailImageZoom(nextZoom);
+
+    if (nextZoom <= 1) {
+      resetDetailImagePan();
+    } else {
+      setDetailImagePan((prev) =>
+       clampDetailPan(prev.x, prev.y, nextZoom)
+      );
+    }
+
     setIsImageNavVisible(true);
   }
 
@@ -530,6 +571,14 @@ export default function Home() {
     );
 
     setDetailImageZoom(nextZoom);
+
+    if (nextZoom <= 1) {
+      resetDetailImagePan();
+    } else {
+      setDetailImagePan((prev) =>
+        clampDetailPan(prev.x, prev.y, nextZoom)
+      );
+    }
   }
   
   function showPrevImage() {
@@ -581,14 +630,23 @@ export default function Home() {
   }
 
   function handleImagePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (detailImageZoom > 1) {
-      setIsImageNavVisible(true);
-      return;
-    }
-    
     const target = e.target as HTMLElement;
 
     if (target.closest("button")) return;
+
+    if (detailImageZoom > 1) {
+      detailImagePanRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        lastX: detailImagePan.x,
+        lastY: detailImagePan.y,
+        isPanning: true,
+      };
+
+      setIsImageNavVisible(true);
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
 
     imageDragRef.current = {
       startX: e.clientX,
@@ -604,6 +662,19 @@ export default function Home() {
   }
 
   function handleImagePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (detailImagePanRef.current.isPanning) {
+      const dx = e.clientX - detailImagePanRef.current.startX;
+      const dy = e.clientY - detailImagePanRef.current.startY;
+
+      const nextPan = clampDetailPan(
+        detailImagePanRef.current.lastX + dx,
+        detailImagePanRef.current.lastY + dy
+      );
+
+      setDetailImagePan(nextPan);
+      return;
+    }
+
     if (!imageDragRef.current.isDragging) return;
 
     const dx = e.clientX - imageDragRef.current.startX;
@@ -616,6 +687,16 @@ export default function Home() {
   }
 
   function handleImagePointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (detailImagePanRef.current.isPanning) {
+      detailImagePanRef.current.isPanning = false;
+
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {}
+
+      return;
+    }
+    
     if (!imageDragRef.current.isDragging) return;
 
     const dx = e.clientX - imageDragRef.current.startX;
@@ -1255,6 +1336,7 @@ export default function Home() {
             {getDetailImages().length > 0 && (
               <div className="relative mb-6 select-none group">
                 <div
+                  ref={detailImageAreaRef}
                   onPointerDown={handleImagePointerDown}
                   onPointerMove={handleImagePointerMove}
                   onPointerUp={handleImagePointerUp}
@@ -1263,6 +1345,7 @@ export default function Home() {
                   onTouchMove={handleDetailImageTouchMove}
                   onPointerCancel={() => {
                     imageDragRef.current.isDragging = false;
+                    detailImagePanRef.current.isPanning = false;
                     setIsImageDragging(false);
                     setImageDragOffset(0);
                   }}
@@ -1294,9 +1377,12 @@ export default function Home() {
                           style={{
                             transform:
                               index === slidePosition
-                                ? `scale(${detailImageZoom})`
+                                ? `translate(${detailImagePan.x}px, ${detailImagePan.y}px) scale(${detailImageZoom})`
                                 : "scale(1)",
-                            transition: "transform 160ms ease",
+                            transition:
+                              detailImagePanRef.current.isPanning
+                                ? "none"
+                                : "transform 160ms ease",
                             transformOrigin: "center center",
                           }}
                           className="w-full max-h-[60vh] object-contain rounded-lg"
