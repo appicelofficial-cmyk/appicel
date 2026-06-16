@@ -106,8 +106,10 @@ export default function Home() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [selectedCellImages, setSelectedCellImages] = useState<any[]>([]);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [slidePosition, setSlidePosition] = useState(1);
   const [imageDragOffset, setImageDragOffset] = useState(0);
   const [isImageDragging, setIsImageDragging] = useState(false);
+  const [isSlideAnimating, setIsSlideAnimating] = useState(false);
   const [isImageNavVisible, setIsImageNavVisible] = useState(false);
 
   const imageDragRef = useRef({
@@ -246,6 +248,9 @@ export default function Home() {
 
   useEffect(() => {
     setActiveImageIndex(0);
+    setSlidePosition(1);
+    setImageDragOffset(0);
+    setIsSlideAnimating(false);
 
     if (!selectedCell?.id) {
       setComments([]);
@@ -450,11 +455,27 @@ export default function Home() {
     return [];
   }
 
+  function getLoopImages() {
+    const images = getDetailImages();
+
+    if (images.length <= 1) {
+      return images;
+    }
+
+    return [
+      images[images.length - 1],
+      ...images,
+      images[0],
+    ];
+  }
+  
   function showPrevImage() {
     const images = getDetailImages();
 
     if (images.length <= 1) return;
 
+    setIsSlideAnimating(true);
+    setSlidePosition((prev) => prev - 1);
     setActiveImageIndex((prev) =>
       prev === 0 ? images.length - 1 : prev - 1
     );
@@ -468,12 +489,30 @@ export default function Home() {
 
     if (images.length <= 1) return;
 
+    setIsSlideAnimating(true);
+    setSlidePosition((prev) => prev + 1);
     setActiveImageIndex((prev) =>
       prev === images.length - 1 ? 0 : prev + 1
     );
 
     setImageDragOffset(0);
     setIsImageNavVisible(true);
+  }
+
+  function handleSlideTransitionEnd() {
+    const images = getDetailImages();
+
+    if (images.length <= 1) return;
+
+    if (slidePosition === images.length + 1) {
+      setIsSlideAnimating(false);
+      setSlidePosition(1);
+    }
+
+    if (slidePosition === 0) {
+      setIsSlideAnimating(false);
+      setSlidePosition(images.length);
+    }
   }
 
   function handleImagePointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -488,6 +527,7 @@ export default function Home() {
     };
 
     setIsImageDragging(true);
+    setIsSlideAnimating(false);
     setImageDragOffset(0);
 
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -499,7 +539,7 @@ export default function Home() {
     const dx = e.clientX - imageDragRef.current.startX;
 
     if (Math.abs(dx) > 5) {
-     imageDragRef.current.moved = true;
+      imageDragRef.current.moved = true;
     }
 
     setImageDragOffset(dx);
@@ -528,6 +568,9 @@ export default function Home() {
 
       return;
     }
+
+    setIsSlideAnimating(true);
+    setSlidePosition(activeImageIndex + 1);
 
     if (!moved) {
       setIsImageNavVisible((prev) => !prev);
@@ -1154,12 +1197,19 @@ export default function Home() {
                 >
                   <div
                     className="flex"
+                    onTransitionEnd={handleSlideTransitionEnd}
                     style={{
-                      transform: `translateX(calc(${-activeImageIndex * 100}% + ${imageDragOffset}px))`,
-                      transition: isImageDragging ? "none" : "transform 220ms ease",
+                      transform:
+                        getDetailImages().length > 1
+                          ? `translateX(calc(${-slidePosition * 100}% + ${imageDragOffset}px))`
+                          : `translateX(${imageDragOffset}px)`,
+                      transition:
+                        isImageDragging || !isSlideAnimating
+                          ? "none"
+                          : "transform 220ms ease",
                     }}
                   >
-                    {getDetailImages().map((image: any, index: number) => (
+                    {getLoopImages().map((image: any, index: number) => (
                       <div
                         key={index}
                         className="w-full shrink-0 flex items-center justify-center"
@@ -1209,60 +1259,64 @@ export default function Home() {
                         ‹
                       </button>
 
-                     <button
-                       type="button"
-                       onPointerDown={(e) => e.stopPropagation()}
-                       onClick={(e) => {
-                         e.stopPropagation();
-                         showNextImage();
-                       }}
-                       className={`
-                       absolute
-                       right-2
-                       top-1/2
-                       -translate-y-1/2
-                       w-10
-                       h-10
-                       rounded-full
-                       bg-black/50
-                       hover:bg-black/70
-                       text-white
-                       text-3xl
-                       flex
-                       items-center
-                       justify-center
-                       transition-opacity
-                       ${isImageNavVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}
-                       md:opacity-0
-                       md:pointer-events-none
-                       md:group-hover:opacity-100
-                       md:group-hover:pointer-events-auto
-                     `}
-                   >
-                     ›
-                   </button>
-                 </>
-               )}
-             </div>
+                      <button
+                        type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          showNextImage();
+                        }}
+                        className={`
+                        absolute
+                        right-2
+                        top-1/2
+                        -translate-y-1/2
+                        w-10
+                        h-10
+                        rounded-full
+                        bg-black/50
+                        hover:bg-black/70
+                        text-white
+                        text-3xl
+                        flex
+                        items-center
+                        justify-center
+                        transition-opacity
+                        ${isImageNavVisible ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}
+                        md:opacity-0
+                        md:pointer-events-none
+                        md:group-hover:opacity-100
+                        md:group-hover:pointer-events-auto
+                      `}
+                    >
+                      ›
+                    </button>
+                  </>
+                )}
+              </div>
 
-             {getDetailImages().length > 1 && (
-               <div className="flex justify-center gap-2 mt-3">
-                 {getDetailImages().map((_, index) => (
-                   <button
-                     key={index}
-                     type="button"
-                     onClick={() => setActiveImageIndex(index)}
-                     className={`w-2 h-2 rounded-full ${
-                       index === activeImageIndex
-                         ? "bg-white"
-                         : "bg-gray-600"
-                     }`}
-                   />
-                 ))}
-               </div>
-             )}
-           </div>
-         )}
+              {getDetailImages().length > 1 && (
+                <div className="flex justify-center gap-2 mt-3">
+                  {getDetailImages().map((_, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => {
+                        setActiveImageIndex(index);
+                        setSlidePosition(index + 1);
+                        setIsSlideAnimating(true);
+                      }}
+                      className={`w-2 h-2 rounded-full ${
+                        index === activeImageIndex
+                          ? "bg-white"
+                          : "bg-gray-600"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
             {(
               selectedCellLinks.length > 0
