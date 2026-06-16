@@ -527,7 +527,7 @@ export default function Home() {
     const nextZoom = clampDetailZoom(
       (distance / detailImagePinchRef.current.distance) *
         detailImagePinchRef.current.zoom
-    ;
+    );
 
     setDetailImageZoom(nextZoom);
   }
@@ -1301,6 +1301,7 @@ export default function Home() {
                           }}
                           className="w-full max-h-[60vh] object-contain rounded-lg"
                         />
+                      </div>
                     ))}
                   </div>
 
