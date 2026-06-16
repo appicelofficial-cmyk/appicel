@@ -111,6 +111,11 @@ export default function Home() {
   const [isImageDragging, setIsImageDragging] = useState(false);
   const [isSlideAnimating, setIsSlideAnimating] = useState(false);
   const [isImageNavVisible, setIsImageNavVisible] = useState(false);
+  const [detailImageZoom, setDetailImageZoom] = useState(1);
+  const detailImagePinchRef = useRef({
+    distance: 0,
+    zoom: 1,
+  });
 
   const imageDragRef = useRef({
     startX: 0,
@@ -251,7 +256,8 @@ export default function Home() {
     setSlidePosition(1);
     setImageDragOffset(0);
     setIsSlideAnimating(false);
-
+    setDetailImageZoom(1);
+    
     if (!selectedCell?.id) {
       setComments([]);
       setSelectedCellLinks([]);
@@ -469,11 +475,69 @@ export default function Home() {
     ];
   }
   
+  function resetDetailImageZoom() {
+    setDetailImageZoom(1);
+  }
+
+  function clampDetailZoom(nextZoom: number) {
+    return Math.min(Math.max(nextZoom, 1), 4);
+  }
+
+  function getDetailTouchDistance(touches: React.TouchList) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function handleDetailImageWheel(e: React.WheelEvent<HTMLDivElement>) {
+    if (getDetailImages().length === 0) return;
+
+    e.preventDefault();
+
+    const nextZoom = clampDetailZoom(
+      detailImageZoom - e.deltaY * 0.001
+    );
+
+    setDetailImageZoom(nextZoom);
+    setIsImageNavVisible(true);
+  }
+
+  function handleDetailImageTouchStart(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length !== 2) return;
+
+    imageDragRef.current.isDragging = false;
+    setIsImageDragging(false);
+    setImageDragOffset(0);
+
+    detailImagePinchRef.current = {
+      distance: getDetailTouchDistance(e.touches),
+      zoom: detailImageZoom,
+    };
+
+    setIsImageNavVisible(true);
+  }
+
+  function handleDetailImageTouchMove(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length !== 2) return;
+
+    e.preventDefault();
+
+    const distance = getDetailTouchDistance(e.touches);
+
+    const nextZoom = clampDetailZoom(
+      (distance / detailImagePinchRef.current.distance) *
+        detailImagePinchRef.current.zoom
+    ;
+
+    setDetailImageZoom(nextZoom);
+  }
+  
   function showPrevImage() {
     const images = getDetailImages();
 
     if (images.length <= 1) return;
 
+    resetDetailImageZoom();
     setIsSlideAnimating(true);
     setSlidePosition((prev) => prev - 1);
     setActiveImageIndex((prev) =>
@@ -489,6 +553,7 @@ export default function Home() {
 
     if (images.length <= 1) return;
 
+    resetDetailImageZoom();
     setIsSlideAnimating(true);
     setSlidePosition((prev) => prev + 1);
     setActiveImageIndex((prev) =>
@@ -516,6 +581,11 @@ export default function Home() {
   }
 
   function handleImagePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (detailImageZoom > 1) {
+      setIsImageNavVisible(true);
+      return;
+    }
+    
     const target = e.target as HTMLElement;
 
     if (target.closest("button")) return;
@@ -1188,6 +1258,9 @@ export default function Home() {
                   onPointerDown={handleImagePointerDown}
                   onPointerMove={handleImagePointerMove}
                   onPointerUp={handleImagePointerUp}
+                  onWheel={handleDetailImageWheel}
+                  onTouchStart={handleDetailImageTouchStart}
+                  onTouchMove={handleDetailImageTouchMove}
                   onPointerCancel={() => {
                     imageDragRef.current.isDragging = false;
                     setIsImageDragging(false);
@@ -1218,9 +1291,16 @@ export default function Home() {
                           src={image.original_image_url || image.image_url}
                           alt={`${selectedCell.title}-${index + 1}`}
                           draggable={false}
+                          style={{
+                            transform:
+                              index === slidePosition
+                                ? `scale(${detailImageZoom})`
+                                : "scale(1)",
+                            transition: "transform 160ms ease",
+                            transformOrigin: "center center",
+                          }}
                           className="w-full max-h-[60vh] object-contain rounded-lg"
                         />
-                      </div>
                     ))}
                   </div>
 
@@ -1302,6 +1382,7 @@ export default function Home() {
                       key={index}
                       type="button"
                       onClick={() => {
+                        resetDetailImageZoom();
                         setActiveImageIndex(index);
                         setSlidePosition(index + 1);
                         setIsSlideAnimating(true);
