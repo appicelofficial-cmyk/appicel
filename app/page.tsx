@@ -663,6 +663,8 @@ export default function Home() {
 
   function handleImagePointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (detailImagePanRef.current.isPanning) {
+      e.preventDefault();
+
       const dx = e.clientX - detailImagePanRef.current.startX;
       const dy = e.clientY - detailImagePanRef.current.startY;
 
@@ -1349,7 +1351,10 @@ export default function Home() {
                     setIsImageDragging(false);
                     setImageDragOffset(0);
                   }}
-                  className="relative overflow-hidden cursor-grab active:cursor-grabbing touch-pan-y rounded-lg"
+                  className="relative overflow-hidden cursor-grab active:cursor-grabbing rounded-lg"
+                  style={{
+                    touchAction: detailImageZoom > 1 ? "none" : "pan-y",
+                  }}
                 >
                   <div
                     className="flex"
