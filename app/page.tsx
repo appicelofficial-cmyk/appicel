@@ -1808,48 +1808,115 @@ export default function Home() {
               設定した場合のみ、期限前に自分で削除できます。
             </p>
 
-            <label className="block w-full mb-4 cursor-pointer">
-              <div className="bg-blue-600 hover:bg-blue-500 text-white text-center py-3 rounded font-bold">
-                画像を選択（最大{PLANS[selectedPlanId as keyof typeof PLANS].imageMax}枚）
-              </div>
+            <div className="mb-4">
+              <p className="text-sm font-bold mb-2">
+                画像（最大{PLANS[selectedPlanId as keyof typeof PLANS].imageMax}枚）
+              </p>
 
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  const currentPlan = PLANS[selectedPlanId as keyof typeof PLANS];
+              <div className="space-y-2">
+                {Array.from({
+                  length: Math.min(
+                    imageFiles.length + 1,
+                    PLANS[selectedPlanId as keyof typeof PLANS].imageMax
+                  ),
+                }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="bg-zinc-800 p-2 rounded"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <p className="text-sm text-gray-300">
+                        {index + 1}枚目
+                        {index === 0 && "（セル表示用）"}
+                      </p>
 
-                  if (files.length === 0) return;
+                      {imageFiles[index] && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (imagePreviews[index]) {
+                              URL.revokeObjectURL(imagePreviews[index]);
+                            }
 
-                  if (files.length > currentPlan.imageMax) {
-                    alert(`画像は最大${currentPlan.imageMax}枚までです`);
-                    return;
-                  }
+                            setImageFiles((prev) =>
+                              prev.filter((_, i) => i !== index)
+                            );
 
-                  imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+                            setImagePreviews((prev) =>
+                              prev.filter((_, i) => i !== index)
+                            );
 
-                  setImageFiles(files);
-                  setImagePreviews(files.map((file) => URL.createObjectURL(file)));
-                  setCrop({ x: 0, y: 0 });
-                  setZoom(1);
-                  setCroppedAreaPixels(null);
-                }}
-                className="hidden"
-              />
-            </label>
+                            if (index === 0) {
+                              setCrop({ x: 0, y: 0 });
+                              setZoom(1);
+                              setCroppedAreaPixels(null);
+                            }
+                          }}
+                          className="text-xs text-red-400 hover:text-red-300"
+                        >
+                         削除
+                        </button>
+                      )}
+                    </div>
 
-            {imageFiles.length > 0 && (
-              <div className="text-sm text-gray-400 mb-4 space-y-1">
-                {imageFiles.map((file, index) => (
-                  <p key={index}>
-                    {index + 1}枚目：{file.name}
-                    {index === 0 && "（セル表示用）"}
-                  </p>
+                    <label className="block cursor-pointer">
+                      <div className="bg-blue-600 hover:bg-blue-500 text-white text-center py-2 rounded font-bold text-sm">
+                        {imageFiles[index] ? "画像を変更" : `${index + 1}枚目を選択`}
+                      </div>
+
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+
+                          if (!file) return;
+
+                          const currentPlan =
+                            PLANS[selectedPlanId as keyof typeof PLANS];
+
+                          if (index >= currentPlan.imageMax) {
+                            alert(`画像は最大${currentPlan.imageMax}枚までです`);
+                            return;
+                          }
+
+                          if (imagePreviews[index]) {
+                            URL.revokeObjectURL(imagePreviews[index]);
+                          }
+
+                          const previewUrl = URL.createObjectURL(file);
+
+                          setImageFiles((prev) => {
+                            const next = [...prev];
+                            next[index] = file;
+                            return next;
+                          });
+
+                          setImagePreviews((prev) => {
+                            const next = [...prev];
+                            next[index] = previewUrl;
+                            return next;
+                          });
+
+                          if (index === 0) {
+                            setCrop({ x: 0, y: 0 });
+                            setZoom(1);
+                            setCroppedAreaPixels(null);
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {imageFiles[index] && (
+                      <p className="text-xs text-gray-400 mt-2 truncate">
+                        選択中：{imageFiles[index].name}
+                      </p>
+                    )}
+                  </div>
                 ))}
               </div>
-            )}
+            </div>
             
             {imagePreviews[0] && (
               <div className="mb-4">
