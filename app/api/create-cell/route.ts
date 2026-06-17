@@ -129,6 +129,7 @@ export async function POST(request: Request) {
       images,
       image_url,
       original_image_url,
+      commentsDisabled,
     } = body;
 
     const selectedPlanId = String(planId || "normal_free_1d") as PlanId;
@@ -271,6 +272,10 @@ export async function POST(request: Request) {
     const firstLink = finalLinks[0];
     const firstImage = finalImages[0];
 
+    const commentsEnabled = plan.isPremium
+      ? !Boolean(commentsDisabled)
+      : true;
+    
     const { data: cell, error: cellError } = await supabaseAdmin
       .from("cells")
       .insert([
@@ -291,6 +296,7 @@ export async function POST(request: Request) {
           price_yen: plan.priceYen,
           rental_days: plan.rentalDays,
           viewer_id: finalViewerId,
+          comments_enabled: commentsEnabled,
         },
       ])
       .select("id")
