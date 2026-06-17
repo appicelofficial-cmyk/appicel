@@ -5,3 +5,44 @@ body {
   margin: 0;
   padding: 0;
 }
+.premium-cell {
+  position: relative;
+  border: none !important;
+  padding: 2px;
+  background: #000;
+  overflow: hidden;
+}
+
+.premium-cell::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background: conic-gradient(
+    from 0deg,
+    #ff004c,
+    #ff9900,
+    #ffff00,
+    #00ff66,
+    #00ccff,
+    #6633ff,
+    #ff00cc,
+    #ff004c
+  );
+  animation: appicel-rainbow-spin 1.6s linear infinite;
+  z-index: 0;
+}
+
+.premium-cell-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+@keyframes appicel-rainbow-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

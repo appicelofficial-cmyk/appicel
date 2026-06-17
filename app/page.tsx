@@ -1200,26 +1200,35 @@ export default function Home() {
   for (let y = 0; y < GRID_SIZE; y++) {
     for (let x = 0; x < GRID_SIZE; x++) {
       const cellData = getCell(x, y);
+      const isPremium = Boolean(cellData?.is_premium);
 
       grid.push(
         <div
           key={`${x}-${y}`}
           onClick={() => handleCellClick(x, y)}
-          className="border border-gray-700 cursor-pointer overflow-hidden bg-black hover:opacity-80"
+          className={`
+            cursor-pointer
+            overflow-hidden
+            bg-black
+            hover:opacity-80
+            ${isPremium ? "premium-cell" : "border border-gray-700"}
+          `}
           style={{
             width: CELL_SIZE,
             height: CELL_SIZE,
           }}
         >
-          {cellData?.image_url ? (
-            <img
-              src={cellData.image_url}
-              alt={cellData.title}
-              className="w-full h-full object-cover"
-            />
-          ) : cellData ? (
-            <div className="w-full h-full bg-green-500" />
-          ) : null}
+          <div className={isPremium ? "premium-cell-inner" : "w-full h-full"}>
+            {cellData?.image_url ? (
+              <img
+                src={cellData.image_url}
+                alt={cellData.title}
+                className="w-full h-full object-cover"
+              />
+            ) : cellData ? (
+              <div className="w-full h-full bg-green-500" />
+            ) : null}
+          </div>
         </div>
       );
     }
