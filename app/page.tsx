@@ -1208,10 +1208,9 @@ export default function Home() {
           onClick={() => handleCellClick(x, y)}
           className={`
             cursor-pointer
-            overflow-hidden
             bg-black
             hover:opacity-80
-            ${isPremium ? "premium-cell" : "border border-gray-700"}
+            ${isPremium ? "premium-cell" : "border border-gray-700 overflow-hidden"}
           `}
           style={{
             width: CELL_SIZE,
@@ -1228,9 +1227,9 @@ export default function Home() {
             ) : cellData ? (
               <div className="w-full h-full bg-green-500" />
             ) : null}
-          </div>
         </div>
-      );
+      </div>
+    );
     }
   }
 
