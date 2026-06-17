@@ -1552,80 +1552,78 @@ export default function Home() {
             
             {selectedCell.comments_enabled === false ? (
               <div className="border-t border-gray-700 pt-4 mt-4">
-                <p className="text-sm text-gray-500 text-center">
-                  コメント欄はオフです
-                </p>
-              </div>
-            ) : (
-              <div className="border-t border-gray-700 pt-4 mt-4">
-                <h3 className="text-lg font-bold mb-3">
-                  コメント {comments.length}/100
-                </h3>
+              <p className="text-sm text-gray-500 text-center">
+                コメント欄はオフです
+              </p>
+            </div>
+          ) : (
+            <div className="border-t border-gray-700 pt-4 mt-4">
+              <h3 className="text-lg font-bold mb-3">
+                コメント {comments.length}/100
+              </h3>
 
-                <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
-                  {comments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className="bg-zinc-800 p-3 rounded"
-                    >
-                      <div className="text-sm text-gray-400 mb-1">
-                        {comment.author || "名無し"}
-                      </div>
-
-                      <div className="text-sm whitespace-pre-wrap">
-                        {comment.body}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <input
-                  value={commentAuthor}
-                  onChange={(e) => setCommentAuthor(e.target.value)}
-                  maxLength={10}
-                  placeholder="名前（10文字まで・未入力なら名無し）"
-                  className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
-                />
-
-                <textarea
-                  value={commentBody}
-                  onChange={(e) => setCommentBody(e.target.value)}
-                  maxLength={150}
-                  placeholder="コメント本文（150文字まで）"
-                  className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
-                />
-
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={saveComment}
-                    className="bg-white text-black px-4 py-2 rounded"
+              <div className="space-y-3 mb-4 max-h-48 overflow-y-auto">
+                {comments.map((comment) => (
+                  <div
+                    key={comment.id}
+                    className="bg-zinc-800 p-3 rounded"
                   >
-                    コメント投稿
-                  </button>
+                    <div className="text-sm text-gray-400 mb-1">
+                      {comment.author || "名無し"}
+                    </div>
 
-                  <div className="flex items-center gap-3">
-                    {selectedCell.has_delete_password && (
-                      <button
-                        onClick={() => userDeleteCell(selectedCell)}
-                        className="text-[11px] text-blue-300/80 hover:text-blue-300"
-                      >
-                        投稿者削除
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => adminDeleteCell(selectedCell)}
-                      className="text-[11px] text-blue-500/60 hover:text-blue-400"
-                    >
-                      管理者削除
-                    </button>
+                    <div className="text-sm whitespace-pre-wrap">
+                      {comment.body}
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
+
+              <input
+                value={commentAuthor}
+                onChange={(e) => setCommentAuthor(e.target.value)}
+                maxLength={10}
+                placeholder="名前（10文字まで・未入力なら名無し）"
+                className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
+              />
+
+              <textarea
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.target.value)}
+                maxLength={150}
+                placeholder="コメント本文（150文字まで）"
+                className="w-full p-2 mb-2 bg-zinc-800 text-white placeholder-gray-400 rounded"
+              />
+
+              <button
+                onClick={saveComment}
+                className="bg-white text-black px-4 py-2 rounded"
+              >
+                コメント投稿
+              </button>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 mt-4">
+            {selectedCell.has_delete_password && (
+              <button
+                onClick={() => userDeleteCell(selectedCell)}
+                className="text-[11px] text-blue-300/80 hover:text-blue-300"
+              >
+                投稿者削除
+              </button>
             )}
+
+            <button
+              onClick={() => adminDeleteCell(selectedCell)}
+              className="text-[11px] text-blue-500/60 hover:text-blue-400"
+            >
+              管理者削除
+            </button>
           </div>
-        </div>
-      )}
+                    </div>
+                  </div>
+                )}
 
       {createCell && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
