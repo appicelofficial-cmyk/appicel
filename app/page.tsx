@@ -968,19 +968,16 @@ export default function Home() {
   async function saveCell() {
     if (!createCell) return;
 
+    const currentPlan = PLANS[selectedPlanId as keyof typeof PLANS];
+
     const finalTitle = title.trim();
     const finalAuthor = author.trim() || "名無し";
-    const finalDescription = description.trim();
+    const finalDescription = description
+      .trim()
+      .slice(0, currentPlan.descriptionMax);
 
     if (!finalTitle) {
       alert("タイトルを入力してください");
-      return;
-    }
-
-    const currentPlan = PLANS[selectedPlanId as keyof typeof PLANS];
-
-    if (selectedPlanId !== "normal_free_1d") {
-      alert("有料プランはStripe決済実装後に利用できます");
       return;
     }
 
@@ -1026,7 +1023,7 @@ export default function Home() {
 
     const { error: croppedError } = await supabase.storage
       .from("cell-images")
-     .upload(croppedFileName, croppedBlob);
+      .upload(croppedFileName, croppedBlob);
 
     if (croppedError) {
       console.error(croppedError);
@@ -1055,7 +1052,7 @@ export default function Home() {
         .upload(fileName, file);
 
       if (error) {
-        console.error(error);
+       console.error(error);
         alert(error.message);
         return;
       }
@@ -1071,40 +1068,59 @@ export default function Home() {
       });
     }
 
-    const response = await fetch("/api/create-cell", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        x: createCell.x,
-        y: createCell.y,
-        title: finalTitle,
-        author: finalAuthor,
-        description: finalDescription,
-        link_type: links[0]?.link_type || "other",
-        link_url: links[0]?.link_url?.trim() || "",
-        image_url: uploadedImages[0].image_url,
-        original_image_url: uploadedImages[0].original_image_url,
-        images: uploadedImages,
-        deletePassword: deletePassword.trim(),
-        planId: selectedPlanId,
-        viewerId: getViewerId(),
-        commentsDisabled,
-        links: links
-          .map((link, index) => ({
-            link_type: link.link_type,
-            link_url: link.link_url.trim(),
-            sort_order: index,
-          }))
-          .filter((link) => link.link_url),
-      }),
-    });
+    const requestBody = {
+      x: createCell.x,
+      y: createCell.y,
+      title: finalTitle,
+      author: finalAuthor,
+      description: finalDescription,
+      link_type: links[0]?.link_type || "other",
+      link_url: links[0]?.link_url?.trim() || "",
+      image_url: uploadedImages[0].image_url,
+      original_image_url: uploadedImages[0].original_image_url,
+      images: uploadedImages,
+      deletePassword: deletePassword.trim(),
+      planId: selectedPlanId,
+      viewerId: getViewerId(),
+      commentsDisabled,
+      links: links
+        .map((link, index) => ({
+          link_type: link.link_type,
+          link_url: link.link_url.trim(),
+          sort_order: index,
+        }))
+        .filter((link) => link.link_url),
+    };
+
+    const isFreePlan = selectedPlanId === "normal_free_1d";
+
+    const response = await fetch(
+      isFreePlan
+        ? "/api/create-cell"
+        : "/api/create-checkout-session",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      }
+    );
 
     const result = await response.json();
 
     if (!response.ok) {
       alert(result.error || "投稿に失敗しました");
+      return;
+    }
+
+    if (!isFreePlan) {
+      if (!result.url) {
+        alert("決済ページを開けませんでした");
+        return;
+      }
+
+      window.location.href = result.url;
       return;
     }
 
@@ -1119,6 +1135,12 @@ export default function Home() {
     setCommentsDisabled(false);
     setImageFiles([]);
     setImagePreviews([]);
+    setLinks([
+      {
+        link_type: "other",
+        link_url: "",
+      },
+    ]);
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCroppedAreaPixels(null);
@@ -1949,7 +1971,7 @@ export default function Home() {
               onClick={saveCell}
               className="bg-white text-black px-4 py-2 rounded"
             >
-              保存
+              {selectedPlanId === "normal_free_1d" ? "保存" : "決済へ進む"}
             </button>
           </div>
         </div>
