@@ -299,6 +299,35 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+
+    if (payment === "success") {
+      alert("決済が完了しました。セルを反映中です。");
+
+      fetchCells();
+      fetchPvRanking();
+
+      setTimeout(() => {
+        fetchCells();
+        fetchPvRanking();
+      }, 1500);
+
+      setTimeout(() => {
+        fetchCells();
+        fetchPvRanking();
+      }, 4000);
+
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    if (payment === "cancel") {
+      alert("決済がキャンセルされました。投稿はまだ完了していません。");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+  
   function fitBoard() {
     if (!containerRef.current) return;
 
