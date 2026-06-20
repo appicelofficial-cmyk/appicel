@@ -83,6 +83,42 @@ export async function POST(request: Request) {
 
   const payload = order.cell_payload;
 
+  // 先に期限切れセルを削除
+  await supabaseAdmin
+    .from("cells")
+    .delete()
+    .lt("expires_at", new Date().toISOString());
+
+  // 決済中に同じセルが埋まっていないか最終確認
+  const { data: existingCell, error: existingCellError } = await supabaseAdmin
+    .from("cells")
+    .select("id")
+    .eq("x", payload.x)
+    .eq("y", payload.y)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (existingCellError) {
+    return NextResponse.json(
+      { error: existingCellError.message },
+      { status: 500 }
+    );
+  }
+
+  if (existingCell) {
+    await supabaseAdmin
+      .from("pending_cell_orders")
+      .update({
+        status: "cell_taken",
+      })
+      .eq("id", order.id);
+
+    return NextResponse.json({
+      ok: false,
+      error: "決済中にセルが埋まりました",
+    });
+  }
+
   const expiresAt = new Date(
     Date.now() + Number(payload.rental_days || 1) * 24 * 60 * 60 * 1000
   ).toISOString();

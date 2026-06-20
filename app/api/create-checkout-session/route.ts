@@ -198,6 +198,35 @@ export async function POST(request: Request) {
     const stripe = new Stripe(stripeSecretKey);
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
+    // 期限切れセルを削除
+    await supabaseAdmin
+      .from("cells")
+      .delete()
+      .lt("expires_at", new Date().toISOString());
+
+    // 決済開始前にセルが空いているか確認
+    const { data: existingCell, error: existingCellError } = await supabaseAdmin
+      .from("cells")
+      .select("id")
+      .eq("x", x)
+      .eq("y", y)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle();
+
+    if (existingCellError) {
+      return NextResponse.json(
+        { error: existingCellError.message },
+        { status: 500 }
+      );
+    }
+
+    if (existingCell) {
+      return NextResponse.json(
+        { error: "このセルはすでに埋まっています" },
+        { status: 409 }
+      );
+    }
+
     const firstLink = finalLinks[0];
     const firstImage = finalImages[0];
 
