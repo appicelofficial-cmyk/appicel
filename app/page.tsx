@@ -302,30 +302,84 @@ export default function Home() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const payment = params.get("payment");
-
-    if (payment === "success") {
-      alert("決済が完了しました。セルを反映中です。");
-
-      fetchCells();
-      fetchPvRanking();
-
-      setTimeout(() => {
-        fetchCells();
-        fetchPvRanking();
-      }, 1500);
-
-      setTimeout(() => {
-        fetchCells();
-        fetchPvRanking();
-      }, 4000);
-
-      window.history.replaceState({}, "", window.location.pathname);
-    }
+    const sessionId = params.get("session_id");
 
     if (payment === "cancel") {
       alert("決済がキャンセルされました。投稿はまだ完了していません。");
       window.history.replaceState({}, "", window.location.pathname);
+      return;
     }
+
+    if (payment !== "success" || !sessionId) return;
+
+    let cancelled = false;
+
+    async function checkPaymentResult(attempt = 1) {
+      try {
+        const response = await fetch(
+          `/api/payment-result?session_id=${encodeURIComponent(sessionId || "")}`
+        );
+
+        const result = await response.json();
+
+        if (cancelled) return;
+
+        fetchCells();
+        fetchPvRanking();
+
+        if (result.status === "paid") {
+          alert("決済が完了しました。セルを反映しました。");
+          window.history.replaceState({}, "", window.location.pathname);
+          return;
+        }
+
+        if (result.status === "cell_taken_refunded") {
+          alert(
+            "決済中にそのセルが埋まったため、投稿は反映されませんでした。決済は自動返金されています。"
+          );
+          window.history.replaceState({}, "", window.location.pathname);
+          return;
+        }
+
+        if (result.status === "refund_failed") {
+          alert(
+            "決済中にそのセルが埋まりましたが、自動返金に失敗しました。管理者確認が必要です。"
+          );
+          window.history.replaceState({}, "", window.location.pathname);
+          return;
+        }
+
+        if (attempt < 8) {
+          setTimeout(() => {
+            checkPaymentResult(attempt + 1);
+          }, 1500);
+          return;
+        }
+
+        alert(
+          "決済は完了しました。セル反映に少し時間がかかっている可能性があります。ページを更新して確認してください。"
+        );
+        window.history.replaceState({}, "", window.location.pathname);
+      } catch (error) {
+        console.error(error);
+
+        if (attempt < 8) {
+          setTimeout(() => {
+            checkPaymentResult(attempt + 1);
+          }, 1500);
+          return;
+        }
+
+        alert("決済結果の確認に失敗しました。ページを更新して確認してください。");
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+
+    checkPaymentResult();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
   
   function fitBoard() {
