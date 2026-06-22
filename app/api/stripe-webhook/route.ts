@@ -52,6 +52,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id || null;
+  
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -77,7 +82,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (order.status === "paid") {
+  if (order.status === "paid" || order.status === "cell_taken_refunded") {
     return NextResponse.json({ ok: true, alreadyProcessed: true });
   }
 
@@ -106,17 +111,67 @@ export async function POST(request: Request) {
   }
 
   if (existingCell) {
-    await supabaseAdmin
-      .from("pending_cell_orders")
-      .update({
-        status: "cell_taken",
-      })
-      .eq("id", order.id);
+    if (!paymentIntentId) {
+      await supabaseAdmin
+        .from("pending_cell_orders")
+        .update({
+          status: "refund_failed",
+          error_message: "PaymentIntent が見つかりません",
+        })
+        .eq("id", order.id);
 
-    return NextResponse.json({
-      ok: false,
-      error: "決済中にセルが埋まりました",
-    });
+      return NextResponse.json(
+        { error: "PaymentIntent が見つかりません" },
+        { status: 500 }
+      );
+    }
+
+    try {
+      const refund = await stripe.refunds.create(
+        {
+          payment_intent: paymentIntentId,
+          reason: "requested_by_customer",
+          metadata: {
+            orderId: order.id,
+            reason: "cell_taken",
+          },
+        },
+        {
+          idempotencyKey: `appicel-cell-taken-refund-${order.id}`,
+        }
+      );
+
+      await supabaseAdmin
+        .from("pending_cell_orders")
+        .update({
+          status: "cell_taken_refunded",
+          stripe_payment_intent: paymentIntentId,
+          refund_id: refund.id,
+          refund_status: refund.status,
+          error_message: "決済中にセルが埋まったため自動返金しました",
+        })
+       .eq("id", order.id);
+
+      return NextResponse.json({
+        ok: true,
+        refunded: true,
+        reason: "cell_taken",
+      });
+    } catch (error: any) {
+      await supabaseAdmin
+        .from("pending_cell_orders")
+        .update({
+          status: "refund_failed",
+          stripe_payment_intent: paymentIntentId,
+          error_message: error.message || "返金に失敗しました",
+        })
+        .eq("id", order.id);
+
+      return NextResponse.json(
+        { error: error.message || "返金に失敗しました" },
+        { status: 500 }
+      );
+    }
   }
 
   const expiresAt = new Date(
@@ -225,6 +280,7 @@ export async function POST(request: Request) {
     .from("pending_cell_orders")
     .update({
       status: "paid",
+      stripe_payment_intent: paymentIntentId,
     })
     .eq("id", order.id);
 
