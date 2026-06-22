@@ -113,6 +113,7 @@ export default function Home() {
   const [isSlideAnimating, setIsSlideAnimating] = useState(false);
   const [isImageNavVisible, setIsImageNavVisible] = useState(false);
   const [detailImageZoom, setDetailImageZoom] = useState(1);
+  const [isSavingCell, setIsSavingCell] = useState(false);
   const [detailImagePan, setDetailImagePan] = useState({ x: 0, y: 0 });
 
   const detailImageAreaRef = useRef<HTMLDivElement | null>(null);
@@ -1050,186 +1051,200 @@ export default function Home() {
 
   async function saveCell() {
     if (!createCell) return;
+    if (isSavingCell) return;
 
-    const currentPlan = PLANS[selectedPlanId as keyof typeof PLANS];
+    let keepLoading = false;
+    setIsSavingCell(true);
 
-    const finalTitle = title.trim();
-    const finalAuthor = author.trim() || "名無し";
-    const finalDescription = description
-      .trim()
-      .slice(0, currentPlan.descriptionMax);
+    try {
+      const currentPlan = PLANS[selectedPlanId as keyof typeof PLANS];
 
-    if (!finalTitle) {
-      alert("タイトルを入力してください");
-      return;
-    }
+      const finalTitle = title.trim();
+      const finalAuthor = author.trim() || "名無し";
+      const finalDescription = description
+        .trim()
+        .slice(0, currentPlan.descriptionMax);
 
-    if (imageFiles.length === 0 || !imagePreviews[0] || !croppedAreaPixels) {
-      alert("画像を選択してください");
-      return;
-    }
-
-    if (imageFiles.length > currentPlan.imageMax) {
-      alert(`画像は最大${currentPlan.imageMax}枚までです`);
-      return;
-    }
-
-    const uploadedImages: any[] = [];
-
-    const firstFile = imageFiles[0];
-    const firstPreview = imagePreviews[0];
-
-    const originalFileName = `${Date.now()}-original-0-${firstFile.name}`;
-
-    const { error: originalError } = await supabase.storage
-      .from("cell-images")
-      .upload(originalFileName, firstFile);
-
-    if (originalError) {
-      console.error(originalError);
-      alert(originalError.message);
-      return;
-    }
-
-    const { data: originalData } = supabase.storage
-      .from("cell-images")
-      .getPublicUrl(originalFileName);
-
-    const originalImageUrlState = originalData.publicUrl;
-
-    const croppedBlob = await getCroppedImage(
-      firstPreview,
-      croppedAreaPixels
-    );
-
-    const croppedFileName = `${Date.now()}-cropped-0.jpg`;
-
-    const { error: croppedError } = await supabase.storage
-      .from("cell-images")
-      .upload(croppedFileName, croppedBlob);
-
-    if (croppedError) {
-      console.error(croppedError);
-      alert(croppedError.message);
-      return;
-    }
-
-    const { data: croppedData } = supabase.storage
-      .from("cell-images")
-      .getPublicUrl(croppedFileName);
-
-    const imageUrl = croppedData.publicUrl;
-
-    uploadedImages.push({
-      image_url: imageUrl,
-      original_image_url: originalImageUrlState,
-      sort_order: 0,
-    });
-
-    for (let i = 1; i < imageFiles.length; i++) {
-      const file = imageFiles[i];
-      const fileName = `${Date.now()}-original-${i}-${file.name}`;
-
-      const { error } = await supabase.storage
-        .from("cell-images")
-        .upload(fileName, file);
-
-      if (error) {
-       console.error(error);
-        alert(error.message);
+      if (!finalTitle) {
+        alert("タイトルを入力してください");
         return;
       }
 
-      const { data } = supabase.storage
+      if (imageFiles.length === 0 || !imagePreviews[0] || !croppedAreaPixels) {
+        alert("画像を選択してください");
+        return;
+      }
+
+      if (imageFiles.length > currentPlan.imageMax) {
+        alert(`画像は最大${currentPlan.imageMax}枚までです`);
+        return;
+      }
+
+      const uploadedImages: any[] = [];
+
+      const firstFile = imageFiles[0];
+      const firstPreview = imagePreviews[0];
+
+      const originalFileName = `${Date.now()}-original-0-${firstFile.name}`;
+
+      const { error: originalError } = await supabase.storage
         .from("cell-images")
-        .getPublicUrl(fileName);
+        .upload(originalFileName, firstFile);
+
+      if (originalError) {
+        console.error(originalError);
+        alert(originalError.message);
+        return;
+      }
+
+      const { data: originalData } = supabase.storage
+        .from("cell-images")
+        .getPublicUrl(originalFileName);
+
+      const originalImageUrlState = originalData.publicUrl;
+
+      const croppedBlob = await getCroppedImage(
+        firstPreview,
+        croppedAreaPixels
+      );
+
+      const croppedFileName = `${Date.now()}-cropped-0.jpg`;
+
+      const { error: croppedError } = await supabase.storage
+        .from("cell-images")
+        .upload(croppedFileName, croppedBlob);
+
+      if (croppedError) {
+        console.error(croppedError);
+        alert(croppedError.message);
+        return;
+      }
+  
+      const { data: croppedData } = supabase.storage
+        .from("cell-images")
+        .getPublicUrl(croppedFileName);
+
+      const imageUrl = croppedData.publicUrl;
 
       uploadedImages.push({
-        image_url: data.publicUrl,
-        original_image_url: data.publicUrl,
-        sort_order: i,
+        image_url: imageUrl,
+        original_image_url: originalImageUrlState,
+        sort_order: 0,
       });
-    }
 
-    const requestBody = {
-      x: createCell.x,
-      y: createCell.y,
-      title: finalTitle,
-      author: finalAuthor,
-      description: finalDescription,
-      link_type: links[0]?.link_type || "other",
-      link_url: links[0]?.link_url?.trim() || "",
-      image_url: uploadedImages[0].image_url,
-      original_image_url: uploadedImages[0].original_image_url,
-      images: uploadedImages,
-      deletePassword: deletePassword.trim(),
-      planId: selectedPlanId,
-      viewerId: getViewerId(),
-      commentsDisabled,
-      links: links
-        .map((link, index) => ({
-          link_type: link.link_type,
-          link_url: link.link_url.trim(),
-          sort_order: index,
-        }))
-        .filter((link) => link.link_url),
-    };
+      for (let i = 1; i < imageFiles.length; i++) {
+        const file = imageFiles[i];
+        const fileName = `${Date.now()}-original-${i}-${file.name}`;
 
-    const isFreePlan = selectedPlanId === "normal_free_1d";
+        const { error } = await supabase.storage
+          .from("cell-images")
+          .upload(fileName, file);
 
-    const response = await fetch(
-      isFreePlan
-        ? "/api/create-cell"
-        : "/api/create-checkout-session",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
+        if (error) {
+          console.error(error);
+          alert(error.message);
+          return;
+        }
+
+        const { data } = supabase.storage
+          .from("cell-images")
+          .getPublicUrl(fileName);
+
+        uploadedImages.push({
+          image_url: data.publicUrl,
+          original_image_url: data.publicUrl,
+          sort_order: i,
+        });
       }
-    );
 
-    const result = await response.json();
+      const requestBody = {
+        x: createCell.x,
+        y: createCell.y,
+        title: finalTitle,
+        author: finalAuthor,
+        description: finalDescription,
+        link_type: links[0]?.link_type || "other",
+        link_url: links[0]?.link_url?.trim() || "",
+        image_url: uploadedImages[0].image_url,
+        original_image_url: uploadedImages[0].original_image_url,
+        images: uploadedImages,
+        deletePassword: deletePassword.trim(),
+        planId: selectedPlanId,
+        viewerId: getViewerId(),
+        commentsDisabled,
+        links: links
+          .map((link, index) => ({
+            link_type: link.link_type,
+            link_url: link.link_url.trim(),
+            sort_order: index,
+          }))
+          .filter((link) => link.link_url),
+      };
 
-    if (!response.ok) {
-      alert(result.error || "投稿に失敗しました");
-      return;
-    }
+      const isFreePlan = selectedPlanId === "normal_free_1d";
 
-    if (!isFreePlan) {
-      if (!result.url) {
-        alert("決済ページを開けませんでした");
+      const response = await fetch(
+        isFreePlan
+          ? "/api/create-cell"
+          : "/api/create-checkout-session",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.error || "投稿に失敗しました");
         return;
       }
 
-      window.location.href = result.url;
-      return;
+      if (!isFreePlan) {
+        if (!result.url) {
+          alert("決済ページを開けませんでした");
+          return;
+        }
+
+        keepLoading = true;
+        window.location.href = result.url;
+        return;
+      }
+
+      setCreateCell(null);
+      setTitle("");
+      setAuthor("");
+      setLinkType("other");
+      setLinkUrl("");
+      setDescription("");
+      setDeletePassword("");
+      setSelectedPlanId("normal_free_1d");
+      setCommentsDisabled(false);
+      setImageFiles([]);
+      setImagePreviews([]);
+      setLinks([
+        {
+          link_type: "other",
+          link_url: "",
+        },
+      ]);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setCroppedAreaPixels(null);
+
+      fetchCells();
+      fetchPvRanking();
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || "投稿処理に失敗しました");
+    } finally {
+      if (!keepLoading) {
+        setIsSavingCell(false);
+      }
     }
-
-    setCreateCell(null);
-    setTitle("");
-    setAuthor("");
-    setLinkType("other");
-    setLinkUrl("");
-    setDescription("");
-    setDeletePassword("");
-    setSelectedPlanId("normal_free_1d");
-    setCommentsDisabled(false);
-    setImageFiles([]);
-    setImagePreviews([]);
-    setLinks([
-      {
-        link_type: "other",
-        link_url: "",
-      },
-    ]);
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-    setCroppedAreaPixels(null);
-
-    fetchCells();
-    fetchPvRanking();
   }
 
   function handleWheel(e: React.WheelEvent) {
@@ -1315,7 +1330,7 @@ export default function Home() {
             cursor-pointer
             bg-black
             hover:opacity-80
-            ${isPremium ? "premium-cell" : "border border-gray-700 overflow-hidden"}
+            ${isPremium ? "premium-cell" : "border border-white/40 overflow-hidden"}
           `}
           style={{
             width: CELL_SIZE,
@@ -1502,7 +1517,7 @@ export default function Home() {
                           draggable={false}
                           style={{
                             transform:
-                              index === slidePosition
+                              getDetailImages().length === 1 || index === slidePosition
                                 ? `translate(${detailImagePan.x}px, ${detailImagePan.y}px) scale(${detailImageZoom})`
                                 : "scale(1)",
                             transition:
@@ -2052,9 +2067,32 @@ export default function Home() {
 
             <button
               onClick={saveCell}
-              className="bg-white text-black px-4 py-2 rounded"
+              disabled={isSavingCell}
+              className={`
+                bg-white
+                text-black
+                px-4
+                py-2
+                rounded
+                font-bold
+                flex
+                items-center
+                justify-center
+                gap-2
+                ${isSavingCell ? "opacity-70 cursor-not-allowed" : "hover:bg-gray-200"}
+              `}
             >
-              {selectedPlanId === "normal_free_1d" ? "保存" : "決済へ進む"}
+              {isSavingCell && (
+                <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              )}
+
+              {isSavingCell
+                ? selectedPlanId === "normal_free_1d"
+                  ? "保存中..."
+                  : "決済ページを準備中..."
+                : selectedPlanId === "normal_free_1d"
+                  ? "保存"
+                  : "決済へ進む"}
             </button>
           </div>
         </div>
