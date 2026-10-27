@@ -1120,29 +1120,6 @@ export default function Home() {
       const firstFile = imageFiles[0];
       const firstPreview = imagePreviews[0];
 
-      const originalFileName = `${Date.now()}-original-0-${firstFile.name}`;
-
-      const { error: originalError } = await supabase.storage
-        .from("cell-images")
-        .upload(originalFileName, firstFile);
-
-      if (originalError) {
-        console.error(originalError);
-        alert(originalError.message);
-        return;
-      }
-
-      const { data: originalData } = supabase.storage
-        .from("cell-images")
-        .getPublicUrl(originalFileName);
-
-      const originalImageUrlState = originalData.publicUrl;
-
-      const croppedBlob = await getCroppedImage(
-        firstPreview,
-        croppedAreaPixels
-      );
-
       const originalImageUrlState =
         await uploadCellImage(
           firstFile,
