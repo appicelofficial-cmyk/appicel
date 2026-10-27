@@ -1049,6 +1049,41 @@ export default function Home() {
     setCreateCell({ x, y });
   }
 
+  async function uploadCellImage(
+    file: Blob | File,
+    fileName: string
+  ) {
+    const formData =
+      new FormData();
+
+    formData.append(
+      "file",
+      file,
+      fileName
+    );
+
+    const response =
+      await fetch(
+        "/api/upload-cell-image",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+    const result =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error ||
+          "画像アップロードに失敗しました"
+     );
+    }
+
+    return result.url as string;
+  }
+  
   async function saveCell() {
     if (!createCell) return;
     if (isSavingCell) return;
@@ -1108,51 +1143,49 @@ export default function Home() {
         croppedAreaPixels
       );
 
-      const croppedFileName = `${Date.now()}-cropped-0.jpg`;
+      const originalImageUrlState =
+        await uploadCellImage(
+          firstFile,
+          `original-${firstFile.name}`
+        );
 
-      const { error: croppedError } = await supabase.storage
-        .from("cell-images")
-        .upload(croppedFileName, croppedBlob);
+      const croppedBlob =
+        await getCroppedImage(
+          firstPreview,
+          croppedAreaPixels
+        );
 
-      if (croppedError) {
-        console.error(croppedError);
-        alert(croppedError.message);
-        return;
-      }
-  
-      const { data: croppedData } = supabase.storage
-        .from("cell-images")
-        .getPublicUrl(croppedFileName);
-
-      const imageUrl = croppedData.publicUrl;
+      const imageUrl =
+        await uploadCellImage(
+          croppedBlob,
+          "cropped.jpg"
+        );
 
       uploadedImages.push({
         image_url: imageUrl,
-        original_image_url: originalImageUrlState,
+        original_image_url:
+          originalImageUrlState,
         sort_order: 0,
       });
 
-      for (let i = 1; i < imageFiles.length; i++) {
-        const file = imageFiles[i];
-        const fileName = `${Date.now()}-original-${i}-${file.name}`;
+      for (
+        let i = 1;
+        i < imageFiles.length;
+        i++
+      ) {
+        const file =
+          imageFiles[i];
 
-        const { error } = await supabase.storage
-          .from("cell-images")
-          .upload(fileName, file);
-
-        if (error) {
-          console.error(error);
-          alert(error.message);
-          return;
-        }
-
-        const { data } = supabase.storage
-          .from("cell-images")
-          .getPublicUrl(fileName);
+        const publicUrl =
+          await uploadCellImage(
+            file,
+            `original-${i}-${file.name}`
+          );
 
         uploadedImages.push({
-          image_url: data.publicUrl,
-          original_image_url: data.publicUrl,
+          image_url: publicUrl,
+          original_image_url:
+            publicUrl,
           sort_order: i,
         });
       }
