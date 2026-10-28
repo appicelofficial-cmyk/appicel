@@ -142,6 +142,8 @@ export default function Home() {
   const [comments, setComments] = useState<any[]>([]);
   const [commentAuthor, setCommentAuthor] = useState("");
   const [commentBody, setCommentBody] = useState("");
+  const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
+  const commentSubmittingRef = useRef(false);
 
   const [pvRanking, setPvRanking] = useState<any[]>([]);
 
@@ -977,46 +979,44 @@ export default function Home() {
   }
 
   async function saveComment() {
-    if (!selectedCell) return;
-
-    if (selectedCell?.comments_enabled === false) {
+    if (!selectedCell || commentSubmittingRef.current) return;
+    if (selectedCell.comments_enabled === false) {
       alert("このセルはコメント欄がオフです");
       return;
     }
-    
-    const body = commentBody.trim();
-
-    if (!body) {
+    if (!commentBody.trim()) {
       alert("本文を入力してください");
       return;
     }
-
     if (comments.length >= 100) {
       alert("コメントは最大100件までです");
       return;
     }
-
-    const finalAuthor = commentAuthor.trim() || "名無し";
-
-    const { error } = await supabase
-      .from("comments")
-      .insert([
-        {
-          cell_id: selectedCell.id,
-          author: finalAuthor.slice(0, 10),
-          body: body.slice(0, 150),
-        }
-      ]);
-
-    if (error) {
-      console.error(error);
-      alert(error.message);
-      return;
+    commentSubmittingRef.current = true;
+    setIsCommentSubmitting(true);
+    try {
+      const response = await fetch("/api/create-comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cellId: String(selectedCell.id), viewerId: getViewerId(),
+          author: commentAuthor, body: commentBody,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        alert(result.error || "投稿に失敗しました。時間をおいてお試しください。");
+        return;
+      }
+      setCommentAuthor("");
+      setCommentBody("");
+      await fetchComments(selectedCell.id);
+    } catch {
+      alert("通信に失敗しました。接続を確認して再度お試しください。");
+    } finally {
+      commentSubmittingRef.current = false;
+      setIsCommentSubmitting(false);
     }
-
-    setCommentAuthor("");
-    setCommentBody("");
-    fetchComments(selectedCell.id);
   }
 
   function getCell(x: number, y: number) {
@@ -1722,9 +1722,10 @@ export default function Home() {
 
               <button
                 onClick={saveComment}
-                className="bg-white text-black px-4 py-2 rounded"
+                disabled={isCommentSubmitting}
+                className="bg-white text-black px-4 py-2 rounded disabled:opacity-50"
               >
-                コメント投稿
+                {isCommentSubmitting ? "投稿中…" : "コメント投稿"}
               </button>
             </div>
           )}
