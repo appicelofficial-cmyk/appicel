@@ -910,30 +910,35 @@ export default function Home() {
 
     if (!ok) return;
 
-    const response = await fetch("/api/admin-delete-cell", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        cellId: cell.id,
-        adminKey,
-      }),
-    });
+    try {
+      const response = await fetch("/api/admin-delete-cell", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cellId: cell.id,
+          adminKey,
+        }),
+      });
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      alert(result.error || "削除できませんでした");
-      return;
+      const result = await response.json();
+      if (!response.ok) {
+        const retryAfter = Number(response.headers.get("Retry-After"));
+        const fallback = response.status === 429
+          ? `認証試行の上限に達しました。${retryAfter > 0 ? `${retryAfter}秒後に` : "時間をおいて"}再度お試しください。`
+          : "削除できませんでした。時間をおいてお試しください。";
+        alert(typeof result.error === "string" ? result.error : fallback);
+        return;
+      }
+      setSelectedCell(null);
+      setComments([]);
+      fetchCells();
+      fetchPvRanking();
+      alert("セルを削除しました");
+    } catch {
+      alert("削除結果を確認できませんでした。接続を確認し、画面を再読み込みしてください。");
     }
-
-    setSelectedCell(null);
-    setComments([]);
-    fetchCells();
-    fetchPvRanking();
-
-    alert("セルを削除しました");
   }
   
   async function userDeleteCell(cell: any) {
