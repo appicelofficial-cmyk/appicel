@@ -879,35 +879,22 @@ export default function Home() {
     return viewerId;
   }
   
-    async function recordView(cellId: string) {
-    const viewerId = getViewerId();
-
-    const oneHourAgo = new Date(
-      Date.now() - 60 * 60 * 1000
-    ).toISOString();
-
-    const { data: existing } = await supabase
-      .from("cell_views")
-      .select("id")
-      .eq("cell_id", cellId)
-      .eq("viewer_id", viewerId)
-      .gte("created_at", oneHourAgo)
-      .limit(1);
-
-    if (existing && existing.length > 0) {
-      return;
+  async function recordView(cellId: string) {
+    try {
+      const response = await fetch("/api/record-view", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cellId: String(cellId), viewerId: getViewerId() }),
+      });
+      if (!response.ok) {
+        console.error("PV recording failed:", response.status);
+        return;
+      }
+      const result = await response.json();
+      if (result.recorded) await fetchPvRanking();
+    } catch {
+      console.error("PV recording failed");
     }
-
-    await supabase
-      .from("cell_views")
-      .insert([
-        {
-          cell_id: cellId,
-          viewer_id: viewerId,
-        }
-      ]);
-
-    fetchPvRanking();
   }
 
   async function adminDeleteCell(cell: any) {
