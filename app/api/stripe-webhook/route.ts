@@ -1,3 +1,4 @@
+import { validatePostLink, validatePostLinks } from "../../../lib/post-links";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
@@ -86,7 +87,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, alreadyProcessed: true });
   }
 
-  const payload = order.cell_payload;
+  const payload = { ...order.cell_payload };
+  const legacyLink = validatePostLink(payload.link_url);
+  // 旧注文のリンク不備で支払い済みのセル作成を止めない。
+  // 新規受付の検証は維持し、ここでは各リンクを独立して検証・除外する。
+  payload.link_url = legacyLink.ok ? legacyLink.url || null : null;
+  if (!payload.link_url) payload.link_type = null;
+  payload.links = Array.isArray(payload.links)
+    ? payload.links.flatMap((link: unknown, index: number) => {
+        const checked = validatePostLinks([link]);
+        return checked.ok
+          ? checked.links.map((safeLink) => ({ ...safeLink, sort_order: index }))
+          : [];
+      })
+    : [];
 
   // 先に期限切れセルを削除
   await supabaseAdmin

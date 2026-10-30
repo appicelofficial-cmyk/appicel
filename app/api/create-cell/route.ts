@@ -1,3 +1,4 @@
+import { validatePostLinks } from "../../../lib/post-links";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHash, randomBytes } from "crypto";
@@ -166,13 +167,11 @@ export async function POST(request: Request) {
           },
         ];
 
-    const finalLinks = rawLinks
-      .map((link: any, index: number) => ({
-        link_type: String(link.link_type || "other").trim() || "other",
-        link_url: String(link.link_url || "").trim(),
-        sort_order: index,
-      }))
-      .filter((link: any) => link.link_url);
+    const checkedLinks = validatePostLinks(rawLinks);
+    if (!checkedLinks.ok) {
+      return NextResponse.json({ error: checkedLinks.error }, { status: 400 });
+    }
+    const finalLinks = checkedLinks.links;
 
     if (finalLinks.length > plan.linkMax) {
       return NextResponse.json(

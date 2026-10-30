@@ -1,3 +1,4 @@
+import { validatePostLinks } from "../../../lib/post-links";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
@@ -134,15 +135,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const finalLinks = Array.isArray(links)
-      ? links
-          .map((link: any, index: number) => ({
-            link_type: String(link.link_type || "other").trim() || "other",
-            link_url: String(link.link_url || "").trim(),
-            sort_order: index,
-          }))
-          .filter((link: any) => link.link_url)
-      : [];
+    const checkedLinks = validatePostLinks((Array.isArray(links) ? links : [{ link_type: body.link_type, link_url: body.link_url }]));
+    if (!checkedLinks.ok) {
+      return NextResponse.json({ error: checkedLinks.error }, { status: 400 });
+    }
+    const finalLinks = checkedLinks.links;
 
     if (finalLinks.length > plan.linkMax) {
       return NextResponse.json(

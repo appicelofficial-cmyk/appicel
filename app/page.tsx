@@ -12,6 +12,7 @@ import {
 } from "react-icons/fa6";
 import { SiLine } from "react-icons/si";
 import Cropper from "react-easy-crop";
+import { POST_LINK_ERROR, postLinkHref, validatePostLink, validatePostLinks } from "../lib/post-links";
 import { supabase } from "../lib/supabase";
 
 const GRID_SIZE = 32;
@@ -1107,6 +1108,12 @@ export default function Home() {
         return;
       }
 
+      const checkedLinks = validatePostLinks(links);
+      if (!checkedLinks.ok) {
+        alert(checkedLinks.error);
+        return;
+      }
+
       const uploadedImages: any[] = [];
 
       const firstFile = imageFiles[0];
@@ -1165,8 +1172,8 @@ export default function Home() {
         title: finalTitle,
         author: finalAuthor,
         description: finalDescription,
-        link_type: links[0]?.link_type || "other",
-        link_url: links[0]?.link_url?.trim() || "",
+        link_type: checkedLinks.links[0]?.link_type || "other",
+        link_url: checkedLinks.links[0]?.link_url || "",
         image_url: uploadedImages[0].image_url,
         original_image_url: uploadedImages[0].original_image_url,
         images: uploadedImages,
@@ -1174,13 +1181,7 @@ export default function Home() {
         planId: selectedPlanId,
         viewerId: getViewerId(),
         commentsDisabled,
-        links: links
-          .map((link, index) => ({
-            link_type: link.link_type,
-            link_url: link.link_url.trim(),
-            sort_order: index,
-          }))
-          .filter((link) => link.link_url),
+        links: checkedLinks.links,
       };
 
       const isFreePlan = selectedPlanId === "normal_free_1d";
@@ -1653,10 +1654,10 @@ export default function Home() {
                         },
                       ]
                     : []
-              ).map((link: any, index: number) => (
+              ).filter((link: any) => postLinkHref(link.link_url)).map((link: any, index: number) => (
                 <a
                   key={index}
-                  href={link.link_url}
+                  href={postLinkHref(link.link_url)}
                   target="_blank"
                   rel="noreferrer"
                   className="
@@ -1888,9 +1889,16 @@ export default function Home() {
                       onChange={(e) =>
                         updateLink(index, "link_url", e.target.value)
                       }
-                      placeholder="リンクURL"
+                      placeholder="リンクURL（example.com も入力できます）"
+                      aria-invalid={!validatePostLink(link.link_url).ok}
+                      aria-describedby={`post-link-error-${index}`}
                       className="w-full p-2 bg-zinc-700 text-white placeholder-gray-400 rounded"
                     />
+                    {!validatePostLink(link.link_url).ok && (
+                      <p id={`post-link-error-${index}`} role="alert" className="mt-1 text-sm text-red-400">
+                        {POST_LINK_ERROR}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
