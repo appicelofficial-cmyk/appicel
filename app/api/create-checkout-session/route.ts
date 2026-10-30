@@ -1,6 +1,6 @@
+import { POSTING_UNAVAILABLE, reservePostingAttempt } from "../../../lib/posting-rate-limit";
 import { validatePostLinks } from "../../../lib/post-links";
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { createHash, randomBytes } from "crypto";
 
@@ -175,25 +175,13 @@ export async function POST(request: Request) {
     }
 
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
     if (!stripeSecretKey) {
-      return NextResponse.json(
-        { error: "STRIPE_SECRET_KEY が設定されていません" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: POSTING_UNAVAILABLE }, { status: 503 });
     }
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json(
-        { error: "Supabase管理者キーが設定されていません" },
-        { status: 500 }
-      );
-    }
-
+    const attempt = await reservePostingAttempt(request, "create-checkout-session");
+    if (!attempt.ok) return attempt.response;
+    const supabaseAdmin = attempt.admin;
     const stripe = new Stripe(stripeSecretKey);
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
     // 期限切れセルを削除
     await supabaseAdmin
@@ -212,8 +200,8 @@ export async function POST(request: Request) {
 
     if (existingCellError) {
       return NextResponse.json(
-        { error: existingCellError.message },
-        { status: 500 }
+        { error: POSTING_UNAVAILABLE },
+        { status: 503 }
       );
     }
 
@@ -276,8 +264,8 @@ export async function POST(request: Request) {
 
     if (orderError) {
       return NextResponse.json(
-        { error: orderError.message },
-        { status: 500 }
+        { error: POSTING_UNAVAILABLE },
+        { status: 503 }
       );
     }
 
@@ -318,8 +306,8 @@ export async function POST(request: Request) {
 
     if (updateError) {
       return NextResponse.json(
-        { error: updateError.message },
-        { status: 500 }
+        { error: POSTING_UNAVAILABLE },
+        { status: 503 }
       );
     }
 
@@ -327,10 +315,10 @@ export async function POST(request: Request) {
       ok: true,
       url: session.url,
     });
-  } catch (error: any) {
+  } catch {
     return NextResponse.json(
-      { error: error.message || "決済ページの作成に失敗しました" },
-      { status: 500 }
+      { error: POSTING_UNAVAILABLE },
+      { status: 503 }
     );
   }
 }

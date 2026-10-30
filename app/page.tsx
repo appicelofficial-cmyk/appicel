@@ -115,6 +115,7 @@ export default function Home() {
   const [isImageNavVisible, setIsImageNavVisible] = useState(false);
   const [detailImageZoom, setDetailImageZoom] = useState(1);
   const [isSavingCell, setIsSavingCell] = useState(false);
+  const savingCellRef = useRef(false);
   const [detailImagePan, setDetailImagePan] = useState({ x: 0, y: 0 });
 
   const detailImageAreaRef = useRef<HTMLDivElement | null>(null);
@@ -1079,7 +1080,8 @@ export default function Home() {
   
   async function saveCell() {
     if (!createCell) return;
-    if (isSavingCell) return;
+    if (savingCellRef.current) return;
+    savingCellRef.current = true;
 
     let keepLoading = false;
     setIsSavingCell(true);
@@ -1245,6 +1247,7 @@ export default function Home() {
       alert(error.message || "投稿処理に失敗しました");
     } finally {
       if (!keepLoading) {
+        savingCellRef.current = false;
         setIsSavingCell(false);
       }
     }

@@ -27,7 +27,7 @@ function setup(name, payload, options = {}) {
  const calls = [];
  const chain = table => {
   const q = {};
-  for (const method of ['select','eq','gte','gt','lt','delete','insert','update']) q[method] = (...args) => { calls.push({table, method, args}); return q; };
+  for (const method of ['select','eq','in','gte','gt','lt','delete','insert','update']) q[method] = (...args) => { calls.push({table, method, args}); return q; };
   q.single = async () => ({data: table === 'pending_cell_orders' && name === 'stripe-webhook' ? { id: 'order', status: options.orderStatus || 'pending', cell_payload: payload } : {id:'created'}, error:null});
   q.maybeSingle = async () => ({data:options.existingCell || null,error:null});
   q.then = resolve => resolve({data:null,error:null,count:0});
@@ -36,12 +36,15 @@ function setup(name, payload, options = {}) {
  class Stripe {
   constructor() { this.checkout = {sessions: {create: async value => { calls.push({checkout:value}); return {id:'session',url:'https://checkout.stripe.test'}; }}}; this.refunds = {create: async (...args) => { calls.push({refund:args}); return {id:'refund',status:'succeeded'}; }}; this.webhooks = {constructEvent: () => { if (options.badSignature) throw Error('invalid signature'); return {type:'checkout.session.completed',data:{object:{id:'session',payment_status:options.paymentStatus || 'paid',payment_intent:'pi_test'}}}; }}; }
  }
- const route = load(`app/api/${name}/route.ts`, {
+ const env = {NODE_ENV:'production',VERCEL:'1',NEXT_PUBLIC_SUPABASE_URL:'https://db.invalid',SUPABASE_SERVICE_ROLE_KEY:'fake',STRIPE_SECRET_KEY:'fake',STRIPE_WEBHOOK_SECRET:'fake'};
+ const mocks = {
   '../../../lib/post-links': links,
-  'next/server': {NextResponse:{json:(data, options) => ({data,status:options?.status || 200})}},
-  '@supabase/supabase-js':{createClient:()=>({from:chain})}, stripe:Stripe,
- }, {NEXT_PUBLIC_SUPABASE_URL:'https://db.invalid',SUPABASE_SERVICE_ROLE_KEY:'fake',STRIPE_SECRET_KEY:'fake',STRIPE_WEBHOOK_SECRET:'fake'});
- return {calls, post: body => route.POST({json:async()=>body, text:async()=>'',headers:new Headers({'stripe-signature':'fake'}),url:'https://app.invalid/api'})};
+  'next/server': {NextResponse:{json:(data, options) => ({data,status:options?.status || 200,headers:options?.headers})}},
+  '@supabase/supabase-js':{createClient:()=>({from:chain,rpc:async()=>({data:{allowed:true,retry_after:0},error:null})})}, stripe:Stripe,
+ };
+ mocks['../../../lib/posting-rate-limit'] = load('lib/posting-rate-limit.ts',mocks,env);
+ const route = load(`app/api/${name}/route.ts`, mocks, env);
+ return {calls, post: body => route.POST({json:async()=>body, text:async()=>'',headers:new Headers({'stripe-signature':'fake','x-vercel-forwarded-for':'203.0.113.1'}),url:'https://app.invalid/api'})};
 }
 const base = {title:'test',viewerId:'viewer',images:[{image_url:'image-unchanged',original_image_url:'original-unchanged'}]};
 for (const name of ['create-cell','create-checkout-session']) {

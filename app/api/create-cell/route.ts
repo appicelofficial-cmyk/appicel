@@ -1,6 +1,6 @@
+import { POSTING_UNAVAILABLE, reservePostingAttempt } from "../../../lib/posting-rate-limit";
 import { validatePostLinks } from "../../../lib/post-links";
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { createHash, randomBytes } from "crypto";
 
 const PLANS = {
@@ -77,38 +77,30 @@ function hashPassword(password: string, salt: string) {
     .digest("hex");
 }
 
-function hashIp(request: Request) {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const realIp = request.headers.get("x-real-ip");
-
-  const ip =
-    forwardedFor?.split(",")[0]?.trim() ||
-    realIp?.trim() ||
-    "unknown";
-
-  return createHash("sha256").update(ip).digest("hex");
-}
-
 async function countFreePosts(
   supabaseAdmin: any,
   viewerId: string,
-  ipHash: string
+  ipHash: string,
+  legacyFreePostIpHash: string
 ) {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const { count: viewerCount } = await supabaseAdmin
+  const { count: viewerCount, error: viewerError } = await supabaseAdmin
     .from("free_cell_posts")
     .select("id", { count: "exact", head: true })
     .eq("viewer_id", viewerId)
     .gte("created_at", since);
 
-  const { count: ipCount } = await supabaseAdmin
+  const { count: ipCount, error: ipError } = await supabaseAdmin
     .from("free_cell_posts")
     .select("id", { count: "exact", head: true })
-    .eq("ip_hash", ipHash)
+    .in("ip_hash", [ipHash, legacyFreePostIpHash])
     .gte("created_at", since);
 
-  return Math.max(viewerCount || 0, ipCount || 0);
+  if (viewerError || ipError || viewerCount == null || ipCount == null) {
+    throw new Error("Daily limit unavailable");
+  }
+  return Math.max(viewerCount, ipCount);
 }
 
 export async function POST(request: Request) {
@@ -227,33 +219,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json(
-        { error: "Supabase管理者キーが設定されていません" },
-        { status: 500 }
-      );
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-
-    const ipHash = hashIp(request);
     const finalViewerId = String(viewerId || "").trim();
+    if (!finalViewerId) {
+      return NextResponse.json({ error: "viewer_id がありません" }, { status: 400 });
+    }
+    const attempt = await reservePostingAttempt(request, "create-cell");
+    if (!attempt.ok) return attempt.response;
+    const { admin: supabaseAdmin, ipHash } = attempt;
 
     if (selectedPlanId === "normal_free_1d") {
-      if (!finalViewerId) {
-        return NextResponse.json(
-          { error: "viewer_id がありません" },
-          { status: 400 }
-        );
-      }
-
       const freePostCount = await countFreePosts(
         supabaseAdmin,
         finalViewerId,
-        ipHash
+        ipHash,
+        attempt.legacyFreePostIpHash
       );
 
       if (freePostCount >= 3) {
@@ -303,8 +282,8 @@ export async function POST(request: Request) {
 
     if (cellError) {
       return NextResponse.json(
-        { error: cellError.message },
-        { status: 500 }
+        { error: POSTING_UNAVAILABLE },
+        { status: 503 }
       );
     }
 
@@ -323,8 +302,8 @@ export async function POST(request: Request) {
       await supabaseAdmin.from("cells").delete().eq("id", cell.id);
 
       return NextResponse.json(
-        { error: imageError.message },
-        { status: 500 }
+        { error: POSTING_UNAVAILABLE },
+        { status: 503 }
       );
     }
 
@@ -344,8 +323,8 @@ export async function POST(request: Request) {
         await supabaseAdmin.from("cells").delete().eq("id", cell.id);
 
         return NextResponse.json(
-          { error: linkError.message },
-          { status: 500 }
+          { error: POSTING_UNAVAILABLE },
+          { status: 503 }
         );
       }
     }
@@ -368,8 +347,8 @@ export async function POST(request: Request) {
         await supabaseAdmin.from("cells").delete().eq("id", cell.id);
 
         return NextResponse.json(
-          { error: passwordError.message },
-          { status: 500 }
+          { error: POSTING_UNAVAILABLE },
+          { status: 503 }
         );
       }
     }
@@ -389,17 +368,17 @@ export async function POST(request: Request) {
         await supabaseAdmin.from("cells").delete().eq("id", cell.id);
 
         return NextResponse.json(
-          { error: freePostError.message },
-          { status: 500 }
+          { error: POSTING_UNAVAILABLE },
+          { status: 503 }
         );
       }
     }
 
     return NextResponse.json({ ok: true, cellId: cell.id });
-  } catch (error: any) {
+  } catch {
     return NextResponse.json(
-      { error: error.message || "投稿に失敗しました" },
-      { status: 500 }
+      { error: POSTING_UNAVAILABLE },
+      { status: 503 }
     );
   }
 }

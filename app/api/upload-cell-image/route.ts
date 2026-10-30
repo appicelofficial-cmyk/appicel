@@ -1,17 +1,11 @@
+import { POSTING_UNAVAILABLE, reservePostingAttempt } from "../../../lib/posting-rate-limit";
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { createHmac, randomUUID } from "crypto";
+import { randomUUID } from "crypto";
 import sharp from "sharp";
 
 export const runtime = "nodejs";
 
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
-
-// 10分間
-const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
-
-// 同一IPから10分間に最大20回
-const RATE_LIMIT_MAX = 20;
 
 const ALLOWED_FORMATS = new Set([
   "jpeg",
@@ -37,22 +31,6 @@ function getContentType(format: string) {
 
 export async function POST(request: Request) {
   try {
-    const supabaseUrl =
-      process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-    const serviceRoleKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json(
-        {
-          error:
-            "Supabase環境変数が設定されていません",
-        },
-        { status: 500 }
-      );
-    }
-
     // -----------------------------
     // Originチェック
     // -----------------------------
@@ -90,106 +68,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      serviceRoleKey
-    );
-
-    // -----------------------------
-    // IP取得
-    // -----------------------------
-
-    const forwarded =
-      request.headers.get(
-        "x-forwarded-for"
-      );
-
-    const ip =
-      forwarded
-        ?.split(",")[0]
-        ?.trim() ||
-      request.headers.get("x-real-ip") ||
-      "unknown";
-
-    const ipHash = createHmac(
-      "sha256",
-      serviceRoleKey
-    )
-      .update(ip)
-      .digest("hex");
-
-    // -----------------------------
-    // 古いログ削除
-    // -----------------------------
-
-    const oneDayAgo =
-      new Date(
-        Date.now() -
-          24 * 60 * 60 * 1000
-      ).toISOString();
-
-    await supabaseAdmin
-      .from("image_upload_logs")
-      .delete()
-      .lt(
-        "created_at",
-        oneDayAgo
-      );
-
-    // -----------------------------
-    // Rate Limit
-    // -----------------------------
-
-    const windowStart =
-      new Date(
-        Date.now() -
-          RATE_LIMIT_WINDOW_MS
-      ).toISOString();
-
-    const {
-      count,
-      error: countError,
-    } = await supabaseAdmin
-      .from("image_upload_logs")
-      .select("*", {
-        count: "exact",
-        head: true,
-      })
-      .eq(
-        "ip_hash",
-        ipHash
-      )
-      .gte(
-        "created_at",
-        windowStart
-      );
-
-    if (countError) {
-      return NextResponse.json(
-        {
-          error:
-            countError.message,
-        },
-        { status: 500 }
-      );
-    }
-
-    if (
-      (count || 0) >=
-      RATE_LIMIT_MAX
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "画像アップロード回数が多すぎます。しばらくしてから再度お試しください。",
-        },
-        { status: 429 }
-      );
-    }
-
-    // -----------------------------
-    // ファイル取得
-    // -----------------------------
+    const attempt = await reservePostingAttempt(request, "upload-cell-image");
+    if (!attempt.ok) return attempt.response;
+    const supabaseAdmin = attempt.admin;
 
     const formData =
       await request.formData();
@@ -352,9 +233,9 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            uploadError.message,
+            POSTING_UNAVAILABLE,
         },
-        { status: 500 }
+        { status: 503 }
       );
     }
 
@@ -365,33 +246,15 @@ export async function POST(request: Request) {
           filePath
         );
 
-    // 成功したアップロードを記録
-    await supabaseAdmin
-      .from("image_upload_logs")
-      .insert([
-        {
-          ip_hash: ipHash,
-        },
-      ]);
-
     return NextResponse.json({
       ok: true,
       url: data.publicUrl,
       path: filePath,
     });
-  } catch (error: any) {
-    console.error(
-      "画像アップロードエラー:",
-      error
-    );
-
+  } catch {
     return NextResponse.json(
-      {
-        error:
-          error.message ||
-          "画像アップロードに失敗しました",
-      },
-      { status: 500 }
+      { error: POSTING_UNAVAILABLE },
+      { status: 503 }
     );
   }
 }
