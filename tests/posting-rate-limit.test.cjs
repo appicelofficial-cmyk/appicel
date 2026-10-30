@@ -10,6 +10,7 @@ const crypto = require('node:crypto');
 const compiled = new Map();
 const scopes = ['create-cell', 'create-checkout-session', 'upload-cell-image'];
 const valid = {
+  x: 0, y: 0,
   title: 'test', viewerId: 'viewer', planId: 'normal_free_1d',
   links: [{ link_type: 'other', link_url: 'example.com' }],
   images: [{ image_url: 'image', original_image_url: 'original' }],
@@ -41,7 +42,7 @@ function setup(options = {}) {
     from: table => {
       state.events.push(`db:${table}`);
       const query = {};
-      for (const method of ['select', 'eq', 'in', 'gte', 'gt', 'lt', 'delete', 'insert', 'update']) {
+      for (const method of ['select', 'eq', 'in', 'gte', 'gt', 'lt', 'lte', 'delete', 'insert', 'update']) {
         query[method] = (...args) => {
           if (['insert', 'update', 'delete'].includes(method)) state.writes.push({ table, method, args });
           if (method === 'in') state.legacyHashes = args[1];
@@ -157,7 +158,7 @@ for (const scope of scopes) {
       assert.equal(state.uploads.length, 1); assert.equal(state.sessions.length, 0);
       assert.ok(state.events.indexOf('sharp') > state.events.indexOf('limit'));
     } else if (scope === 'create-cell') {
-      const cell = state.writes.find(w => w.table === 'cells').args[0][0];
+      const cell = state.writes.find(w => w.table === 'cells' && w.method === 'insert').args[0][0];
       assert.equal(cell.link_url, 'https://example.com/');
       const log = state.writes.find(w => w.table === 'free_cell_posts').args[0][0];
       assert.equal(log.ip_hash, state.rpc[0].args.p_ip_hash);

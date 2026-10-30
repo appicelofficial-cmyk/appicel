@@ -102,11 +102,19 @@ export async function POST(request: Request) {
       })
     : [];
 
-  // 先に期限切れセルを削除
-  await supabaseAdmin
+  if (!Number.isInteger(payload.x) || !Number.isInteger(payload.y) ||
+      payload.x < 0 || payload.x > 31 || payload.y < 0 || payload.y > 31) {
+    return NextResponse.json({ error: "注文の座標を確認できません" }, { status: 503 });
+  }
+  const now = new Date().toISOString();
+  // Only this order's coordinate; cleanup failure must not fall through to save.
+  const { error: cleanupError } = await supabaseAdmin
     .from("cells")
     .delete()
-    .lt("expires_at", new Date().toISOString());
+    .eq("x", payload.x).eq("y", payload.y).lte("expires_at", now);
+  if (cleanupError) {
+    return NextResponse.json({ error: "投稿の保存準備に失敗しました" }, { status: 503 });
+  }
 
   // 決済中に同じセルが埋まっていないか最終確認
   const { data: existingCell, error: existingCellError } = await supabaseAdmin
@@ -114,7 +122,7 @@ export async function POST(request: Request) {
     .select("id")
     .eq("x", payload.x)
     .eq("y", payload.y)
-    .gt("expires_at", new Date().toISOString())
+    .gt("expires_at", now)
     .maybeSingle();
 
   if (existingCellError) {

@@ -14,6 +14,7 @@ import { SiLine } from "react-icons/si";
 import Cropper from "react-easy-crop";
 import { POST_LINK_ERROR, postLinkHref, validatePostLink, validatePostLinks } from "../lib/post-links";
 import { supabase } from "../lib/supabase";
+import { cellExpiryTime, isActiveCell } from "../lib/cell-expiry";
 
 const GRID_SIZE = 32;
 const CELL_SIZE = 24;
@@ -204,6 +205,7 @@ export default function Home() {
   }
 
   function showCellNotice(cell: any) {
+    if (!isActiveCell(cell)) return;
     const name = cell.author?.trim() || "名無し";
 
     setCellNotice(
@@ -288,21 +290,38 @@ export default function Home() {
   }, [selectedCell?.id]);
   
   useEffect(() => {
-    deleteExpiredCells();
-
-    const deleteTimer = setInterval(() => {
-      deleteExpiredCells();
-    }, 1000);
+    const refresh = () => {
+      setNowTime(Date.now());
+      if (document.visibilityState !== "visible") return;
+      fetchCells();
+      fetchPvRanking();
+    };
+    const refreshTimer = setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
 
     const clockTimer = setInterval(() => {
       setNowTime(Date.now());
     }, 1000);
 
     return () => {
-      clearInterval(deleteTimer);
+      clearInterval(refreshTimer);
       clearInterval(clockTimer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedCell && !isActiveCell(selectedCell, nowTime)) {
+      setSelectedCell(null);
+      setComments([]);
+      setSelectedCellLinks([]);
+      setSelectedCellImages([]);
+      setCommentAuthor("");
+      setCommentBody("");
+    }
+  }, [nowTime, selectedCell]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -428,33 +447,15 @@ export default function Home() {
   }
 
   async function fetchCells() {
-    const { data } = await supabase.from("cells").select("*");
-    setCells(data || []);
-  }
-  
-  async function deleteExpiredCells() {
-    const now = new Date().toISOString();
-
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("cells")
-      .delete()
-      .lt("expires_at", now);
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    fetchCells();
-    fetchPvRanking();
+      .select("*")
+      .gt("expires_at", new Date().toISOString());
+    if (!error) setCells(data || []);
   }
 
   function parseExpiresAt(expiresAt: string) {
-    if (expiresAt.endsWith("Z")) {
-      return new Date(expiresAt).getTime();
-    }
-
-    return new Date(expiresAt + "Z").getTime();
+    return cellExpiryTime(expiresAt);
   }
   
   function formatRemaining(expiresAt: string | null) {
@@ -491,7 +492,7 @@ export default function Home() {
 
     data?.forEach((view: any) => {
       const cell = view.cells;
-      if (!cell) return;
+      if (!isActiveCell(cell)) return;
 
       if (!map[view.cell_id]) {
         map[view.cell_id] = {
@@ -504,8 +505,7 @@ export default function Home() {
     });
 
     const ranking = Object.values(map)
-      .sort((a: any, b: any) => b.count - a.count)
-      .slice(0, 20);
+      .sort((a: any, b: any) => b.count - a.count);
 
     setPvRanking(ranking);
   }
@@ -981,12 +981,13 @@ export default function Home() {
   }
 
   async function openCell(cell: any) {
+    if (!isActiveCell(cell)) return;
     setSelectedCell(cell);
     recordView(cell.id);
   }
 
   async function saveComment() {
-    if (!selectedCell || commentSubmittingRef.current) return;
+    if (!isActiveCell(selectedCell) || commentSubmittingRef.current) return;
     if (selectedCell.comments_enabled === false) {
       alert("このセルはコメント欄がオフです");
       return;
@@ -1027,7 +1028,7 @@ export default function Home() {
   }
 
   function getCell(x: number, y: number) {
-    return cells.find((cell) => cell.x === x && cell.y === y);
+    return cells.find((cell) => cell.x === x && cell.y === y && isActiveCell(cell, Math.max(nowTime, Date.now())));
   }
 
   async function handleCellClick(x: number, y: number) {
@@ -1359,6 +1360,8 @@ export default function Home() {
     }
   }
 
+  const visibleRanking = pvRanking.filter((item: any) => isActiveCell(item.cell, nowTime)).slice(0, 20);
+
   return (
     <main className="min-h-screen md:h-screen bg-black text-white overflow-y-auto md:overflow-hidden">
       <h1 className="text-4xl font-bold text-center h-[70px] flex items-center justify-center">
@@ -1366,7 +1369,7 @@ export default function Home() {
       </h1>
       
       <div className="h-10 flex items-center justify-center">
-        {cellNotice && (
+        {cellNotice && isActiveCell(cellNoticeCell, nowTime) && (
           <button
             onClick={() => {
               if (cellNoticeCell) {
@@ -1410,13 +1413,13 @@ export default function Home() {
             24時間閲覧ランキング(TOP20)
           </h2>
 
-          {pvRanking.length === 0 ? (
+          {visibleRanking.length === 0 ? (
             <p className="text-xs text-gray-500 text-center">
               まだ閲覧がありません
             </p>
           ) : (
             <div className="space-y-2">
-              {pvRanking.map((item: any, index: number) => (
+              {visibleRanking.map((item: any, index: number) => (
                 <button
                   key={item.cell.id}
                   onClick={() => openCell(item.cell)}
@@ -1442,7 +1445,7 @@ export default function Home() {
         </aside>
       </div>
 
-      {selectedCell && (
+      {selectedCell && isActiveCell(selectedCell, nowTime) && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className="relative bg-zinc-900 p-6 rounded-xl w-[400px] max-w-[90vw] max-h-[90vh] overflow-y-auto border border-gray-700">
             <button

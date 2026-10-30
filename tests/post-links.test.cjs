@@ -27,7 +27,7 @@ function setup(name, payload, options = {}) {
  const calls = [];
  const chain = table => {
   const q = {};
-  for (const method of ['select','eq','in','gte','gt','lt','delete','insert','update']) q[method] = (...args) => { calls.push({table, method, args}); return q; };
+  for (const method of ['select','eq','in','gte','gt','lt','lte','delete','insert','update']) q[method] = (...args) => { calls.push({table, method, args}); return q; };
   q.single = async () => ({data: table === 'pending_cell_orders' && name === 'stripe-webhook' ? { id: 'order', status: options.orderStatus || 'pending', cell_payload: payload } : {id:'created'}, error:null});
   q.maybeSingle = async () => ({data:options.existingCell || null,error:null});
   q.then = resolve => resolve({data:null,error:null,count:0});
@@ -46,7 +46,7 @@ function setup(name, payload, options = {}) {
  const route = load(`app/api/${name}/route.ts`, mocks, env);
  return {calls, post: body => route.POST({json:async()=>body, text:async()=>'',headers:new Headers({'stripe-signature':'fake','x-vercel-forwarded-for':'203.0.113.1'}),url:'https://app.invalid/api'})};
 }
-const base = {title:'test',viewerId:'viewer',images:[{image_url:'image-unchanged',original_image_url:'original-unchanged'}]};
+const base = {x:0,y:0,title:'test',viewerId:'viewer',images:[{image_url:'image-unchanged',original_image_url:'original-unchanged'}]};
 for (const name of ['create-cell','create-checkout-session']) {
  test(`${name}: invalid array and legacy links rejected before DB/Checkout`, async () => {
   for (const value of bad) for (const legacy of [false,true]) {

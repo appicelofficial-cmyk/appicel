@@ -96,6 +96,10 @@ export async function POST(request: Request) {
       commentsDisabled,
     } = body;
 
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x > 31 || y < 0 || y > 31) {
+      return NextResponse.json({ error: "座標が正しくありません" }, { status: 400 });
+    }
+
     const selectedPlanId = String(planId || "") as PlanId;
     const plan = PLANS[selectedPlanId];
 
@@ -183,11 +187,15 @@ export async function POST(request: Request) {
     const supabaseAdmin = attempt.admin;
     const stripe = new Stripe(stripeSecretKey);
 
-    // 期限切れセルを削除
-    await supabaseAdmin
+    const now = new Date().toISOString();
+    // Only the selected coordinate; never rely on browser cleanup.
+    const { error: cleanupError } = await supabaseAdmin
       .from("cells")
       .delete()
-      .lt("expires_at", new Date().toISOString());
+      .eq("x", x).eq("y", y).lte("expires_at", now);
+    if (cleanupError) {
+      return NextResponse.json({ error: POSTING_UNAVAILABLE }, { status: 503 });
+    }
 
     // 決済開始前にセルが空いているか確認
     const { data: existingCell, error: existingCellError } = await supabaseAdmin
@@ -195,7 +203,7 @@ export async function POST(request: Request) {
       .select("id")
       .eq("x", x)
       .eq("y", y)
-      .gt("expires_at", new Date().toISOString())
+      .gt("expires_at", now)
       .maybeSingle();
 
     if (existingCellError) {

@@ -125,6 +125,10 @@ export async function POST(request: Request) {
       commentsDisabled,
     } = body;
 
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x > 31 || y < 0 || y > 31) {
+      return NextResponse.json({ error: "座標が正しくありません" }, { status: 400 });
+    }
+
     const selectedPlanId = String(planId || "normal_free_1d") as PlanId;
     const plan = PLANS[selectedPlanId];
 
@@ -241,6 +245,23 @@ export async function POST(request: Request) {
           { status: 429 }
         );
       }
+    }
+
+    // A browser no longer deletes expired rows. Reuse only this coordinate,
+    // through service_role, and stop if cleanup failed (e.g. an unexpected FK).
+    const now = new Date().toISOString();
+    const { error: cleanupError } = await supabaseAdmin.from("cells")
+      .delete().eq("x", x).eq("y", y).lte("expires_at", now);
+    if (cleanupError) {
+      return NextResponse.json({ error: POSTING_UNAVAILABLE }, { status: 503 });
+    }
+    const { data: existingCell, error: existingCellError } = await supabaseAdmin.from("cells")
+      .select("id").eq("x", x).eq("y", y).gt("expires_at", now).maybeSingle();
+    if (existingCellError) {
+      return NextResponse.json({ error: POSTING_UNAVAILABLE }, { status: 503 });
+    }
+    if (existingCell) {
+      return NextResponse.json({ error: "このセルはすでに埋まっています" }, { status: 409 });
     }
 
     const expiresAt = new Date(
